@@ -269,6 +269,20 @@ for i in $(find . -name "*.2x.sam" | tr "\n" " ");
 if [ ! -d "alignments" ]; then mkdir "alignments"; fi; #make a directory to hold fasta sequences containing extracted haplotypes
 ams=$(find ./haplotypes -name "*.2x.fa" | cut -d_ -f1-2 | sort -u | rev | cut -d'/' -f1 | rev);
 echo "$ams" | parallel 'cat ./haplotypes/{}_*.2x.fa > ./alignments/{}.mfa'; #concatenate all fasta haplotypes belonging to a single contig:range
+
+myalignhaps() {
+              i=$1;
+              thr=$(lscpu | grep "^CPU(s):" | awk '{print $2}'); #max threads
+              rr=$(echo "$i" | cut -d'_' -f1 ); #reference contig name, e.g. jcf7180008454378
+              ss=$(echo "$i" | cut -d'.' -f1 ); #refcontig+siterange, e.g. jcf7180008454378_303-304
+              #bwa index "$pd"/"$rr"_ref.txt;
+              /home/reevesp/bin/bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i"| /home/reevesp/bin/samtools sort -O BAM --threads "$thr" -o "$pd"/alignments/"$ss"_aligned_haps.bam;
+              sambamba index "$pd"/alignments/"$ss"_aligned_haps.bam "$pd"/alignments/"$ss"_aligned_haps.bam.bai;
+}
+export -f myalignhaps;
+
+pd=$(pwd); export pd;
+find $(pwd)"/alignments" -name "*.mfa" | rev | cut -d'/' -f1 | rev | parallel --env pd myalignhaps;
 #start here, do bwa-mem in parallel with *_ref.txt
 
 
