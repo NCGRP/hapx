@@ -116,17 +116,81 @@ myinsertion() {
 }
 export -f myinsertion;
 
+#myalignhaps() aligns the extracted read pair haplotypes to their reference contig for visualization or further processing by user
+myalignhaps() {
+              i=$1;
+              thr=$(lscpu | grep "^CPU(s):" | awk '{print $2}'); #max threads
+              rr=$(echo "$i" | cut -d'_' -f1 ); #reference contig name, e.g. jcf7180008454378
+              ss=$(echo "$i" | cut -d'.' -f1 ); #refcontig+siterange, e.g. jcf7180008454378_303-304
+              #bwa index "$pd"/"$rr"_ref.txt;
+              /home/reevesp/bin/bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i"| /home/reevesp/bin/samtools sort -O BAM --threads "$thr" -o "$pd"/alignments/"$ss"_aligned_haps.bam;
+              sambamba index "$pd"/alignments/"$ss"_aligned_haps.bam "$pd"/alignments/"$ss"_aligned_haps.bam.bai;
+}
+export -f myalignhaps;
+
 ##END SUBROUTINES##
 
 
 #acquire command line variables
 ref=$1; #path to the reference genome sequence in multi-fasta format
-aln=$2; #path to the bam file containing the alignment of reads to ref
-sites=$3; #genomic regions to use
+bam=$2; #path to the bam file containing the alignment of reads to ref
+alnr=$3; #aligner used to create bam file (gem, bwamem)
+sites=$4; #genomic regions to use
+
+if [[ "$alnr" == "gem" ]];
+then rgf=12; #read group info in field 12 for gem bam output
+elif [[ "$alnr" == "bwamem" ]];
+then rgf=17; #read group info in field 17 for bwamem bam output
+else echo "Unrecognized aligner: $alnr.  Quitting...";
+  return;
+  exit;
+fi;
+
+stf=3; #samtools view -f option
+stF=3852; #samtools view -F option
+stq=60; #samtools view -q option
 e=$(echo "$sites" | tr "," "\n"); #format sites for proper parsing by samtools view
 
-#extract read pairs at site using samtools. Extract proper pairs with mapping quality > 60 excluding unmapped pairs
-echo "$e" | parallel 'samtools view -f 2 -F 4 -q 60 '"$aln"' "{}" | sort > {}.tmp; \
+
+
+
+#          while [[ "$#" -gt 0 ]]; do case $1 in
+#            -d|--deploy) deploy="$2"; shift;;
+#            -u|--uglify) uglify=1;;
+#            *) echo "Unknown parameter passed: $1"; exit 1;;
+#          esac; shift; done
+#          
+#          echo "Should deploy? $deploy"
+#          echo "Should uglify? $uglify"
+#          
+#          
+#          
+#          
+#          
+#          
+#          
+#          
+#          
+#          while [[ "$#" -gt 0 ]]; do case $1 in
+#            -d|--deploy) deploy="$2"; shift;;
+#            -u|--uglify) uglify=1;;
+#            *) echo "Unknown parameter passed: $1"; exit 1;;
+#          esac; shift; done
+#          
+#          echo "Should deploy? $deploy"
+#          echo "Should uglify? $uglify"
+
+
+
+
+
+
+
+
+
+
+#extract read pairs at site using samtools. Include read pairs (1) and proper pairs (+2= -f 3) with mapping quality > 60 (-q 60) excluding unmapped reads (4) and reads whose mate is unmapped (+8= 
+echo "$e" | parallel 'samtools view -f '"$stf"' -F '"$stF"' -q '"$stq"' '"$bam"' "{}" | sort > {}.tmp; \
   mv {}.tmp $(echo {} | tr ":" "_").tmp';
   
 #describe number of read pairs and single ends of a read pair extracted in a tabular format
@@ -140,6 +204,7 @@ f=$(while read j;
     echo "$j $pp $ss";
   done <<<"$e";)
 echo "Number of reads found at sites:"$'\n'"contig:sites pairedreads singlereads"$'\n'"$f"$'\n';
+echo "Number of reads found at sites:"$'\n'"contig:sites pairedreads singlereads"$'\n'"$f" > ReadReport.txt;
 
 #           sample output:
 #           Number of reads found at sites
@@ -149,6 +214,12 @@ echo "Number of reads found at sites:"$'\n'"contig:sites pairedreads singlereads
 
 
 g=$(echo "$f" | awk -F' ' '$2+$3!=0 {print $0}'); #remove any contigs from consideration when there are 0 reads (no paired reads:$2, no unpaired reads:$3) that align to them (this could also be a variable that supports a cutoff)
+if [[ "$g" == "" ]];
+then echo "No sites with reads. Quitting...";
+  return;
+  exit;
+  
+fi;
 
 #extract each contig from the reference genome to be used by itself as a reference for realignment with the extracted read pairs, then bwa index
 echo "$g" | cut -d: -f1 | parallel 'sed -n -e "/^>{}$/,/>/p" '"$ref"' | sed "$ d" > {}_ref.txt; bwa index {}_ref.txt'; #sed extracts lines from name of contig of interest until next contig name line, second sed deletes the last line
@@ -157,7 +228,7 @@ echo "$g" | cut -d: -f1 | parallel 'sed -n -e "/^>{}$/,/>/p" '"$ref"' | sed "$ d
 #then sort reads into individual read pairs, resulting files are like {contigname_readname.rp.fq}
 echo "Reconstructing fastq files for reads found at sites:";
 for i in $(echo "$g" | cut -d' ' -f1 | tr ':' '_' | tr '\n' ' ');
-  do awk -F$'\t' '{print "@"$1,$9,$10,"+",$11,$17}' "$i".tmp | awk -F' ' '{if ($2 > 0) {print $1"_"$6":f",$3,$4,$5} else if ($2 < 0) {print $1"_"$6":r",$3,$4,$5}}' | tr " " "\n" > "$i"_reads.fq;
+  do awk -F$'\t' -v rgf=$rgf '{print "@"$1,$9,$10,"+",$11,$rgf}' "$i".tmp | sed '/^$/d' | awk -F' ' '{if ($2 > 0) {print $1"_"$6":f",$3,$4,$5} else if ($2 < 0) {print $1"_"$6":r",$3,$4,$5}}' | tr " " "\n" > "$i"_reads.fq;
 
     m=$(grep ^'@' "$i"_reads.fq | cut -d: -f1-9 | sort -u); #capture list of unique read pair names (includes also unpaired reads with unique names) 
     for j in $m;
@@ -166,8 +237,8 @@ for i in $(echo "$g" | cut -d' ' -f1 | tr ':' '_' | tr '\n' ' ');
         grep -A3 "$j" "$i"_reads.fq > "$i"_"$fn".rp.fq; #save read pair into its own reconstructed fastq file
       done;
     
-    rm "$i"_reads.fq; #clean up
-    rm "$i".tmp;
+    #rm "$i"_reads.fq; #clean up
+    #rm "$i".tmp;
   done;
 
 #           Here is a sample reconstructed *.rp.fq file, note readgroup in col9 of name, and "orientation" or "endedness of read pair" in col10:
@@ -192,7 +263,7 @@ for i in $(find . -name "*.rp.fq" | cut -d'/' -f2 | sed 's/\.rp\.fq//g' | tr "\n
     sambamba index "$i".bam "$i".bam.bai;
 
     #mapping quality changes upon realignment, extract only reads with new mapping quality > 60, excluding unmapped, convert those to proper fastq file
-    samtools view -F 4 -q 60 "$i".bam | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" > "$i".2xrp.fq;
+    samtools view -F "$stF" -q "$stq" "$i".bam | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" > "$i".2xrp.fq;
     if [[ $(cat "$i".2xrp.fq) != "" ]]; #only re-realign if there are reads left after latest quality filter
     then bwa mem "$h"_ref.txt "$i".2xrp.fq > "$i".2x.sam; #perform second realignment
       #samtools sort "$i.2x.sam" -O BAM -o "$i".2x.bam; #convert sam to bam
@@ -200,7 +271,7 @@ for i in $(find . -name "*.rp.fq" | cut -d'/' -f2 | sed 's/\.rp\.fq//g' | tr "\n
     fi;
     
     #clean up
-    rm "$i".sam "$i".bam "$i".bam.bai "$i".2xrp.fq "$i".rp.fq; #clean up
+    #rm "$i".sam "$i".bam "$i".bam.bai "$i".2xrp.fq "$i".rp.fq; #clean up
   done;
 
 
@@ -269,17 +340,6 @@ for i in $(find . -name "*.2x.sam" | tr "\n" " ");
 if [ ! -d "alignments" ]; then mkdir "alignments"; fi; #make a directory to hold fasta sequences containing extracted haplotypes
 ams=$(find ./haplotypes -name "*.2x.fa" | cut -d_ -f1-2 | sort -u | rev | cut -d'/' -f1 | rev);
 echo "$ams" | parallel 'cat ./haplotypes/{}_*.2x.fa > ./alignments/{}.mfa'; #concatenate all fasta haplotypes belonging to a single contig:range
-
-myalignhaps() {
-              i=$1;
-              thr=$(lscpu | grep "^CPU(s):" | awk '{print $2}'); #max threads
-              rr=$(echo "$i" | cut -d'_' -f1 ); #reference contig name, e.g. jcf7180008454378
-              ss=$(echo "$i" | cut -d'.' -f1 ); #refcontig+siterange, e.g. jcf7180008454378_303-304
-              #bwa index "$pd"/"$rr"_ref.txt;
-              /home/reevesp/bin/bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i"| /home/reevesp/bin/samtools sort -O BAM --threads "$thr" -o "$pd"/alignments/"$ss"_aligned_haps.bam;
-              sambamba index "$pd"/alignments/"$ss"_aligned_haps.bam "$pd"/alignments/"$ss"_aligned_haps.bam.bai;
-}
-export -f myalignhaps;
 
 pd=$(pwd); export pd;
 find $(pwd)"/alignments" -name "*.mfa" | rev | cut -d'/' -f1 | rev | parallel --env pd myalignhaps;
