@@ -123,8 +123,10 @@ myalignhaps() {
               rr=$(echo "$i" | cut -d'_' -f1 ); #reference contig name, e.g. jcf7180008454378
               ss=$(echo "$i" | cut -d'.' -f1 ); #refcontig+siterange, e.g. jcf7180008454378_303-304
               #bwa index "$pd"/"$rr"_ref.txt;
-              /home/reevesp/bin/bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i"| /home/reevesp/bin/samtools sort -O BAM --threads "$thr" -o "$pd"/alignments/"$ss"_aligned_haps.bam;
+              /home/reevesp/bin/bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i"| /home/reevesp/bin/samtools sort -O BAM --threads "$thr" -o "$pd"/alignments/"$ss"_aligned_haps.bam0;
+              /home/reevesp/bin/samtools view -F 2048 -O BAM "$pd"/alignments/"$ss"_aligned_haps.bam0 -o "$pd"/alignments/"$ss"_aligned_haps.bam; #remove secondary/supplementary alignments (-F 2048)
               sambamba index "$pd"/alignments/"$ss"_aligned_haps.bam "$pd"/alignments/"$ss"_aligned_haps.bam.bai;
+              "$pd"/alignments/"$ss"_aligned_haps.bam0;
 }
 export -f myalignhaps;
 
@@ -146,7 +148,7 @@ else echo "Unrecognized aligner: $alnr.  Quitting...";
   exit;
 fi;
 
-stf=3; #samtools view -f option
+stf=1; #samtools view -f option
 stF=3852; #samtools view -F option
 stq=60; #samtools view -q option
 e=$(echo "$sites" | tr "," "\n"); #format sites for proper parsing by samtools view
@@ -218,7 +220,6 @@ if [[ "$g" == "" ]];
 then echo "No sites with reads. Quitting...";
   return;
   exit;
-  
 fi;
 
 #extract each contig from the reference genome to be used by itself as a reference for realignment with the extracted read pairs, then bwa index
@@ -228,25 +229,29 @@ echo "$g" | cut -d: -f1 | parallel 'sed -n -e "/^>{}$/,/>/p" '"$ref"' | sed "$ d
 #then sort reads into individual read pairs, resulting files are like {contigname_readname.rp.fq}
 echo "Reconstructing fastq files for reads found at sites:";
 for i in $(echo "$g" | cut -d' ' -f1 | tr ':' '_' | tr '\n' ' ');
-  do awk -F$'\t' -v rgf=$rgf '{print "@"$1,$9,$10,"+",$11,$rgf}' "$i".tmp | sed '/^$/d' | awk -F' ' '{if ($2 > 0) {print $1"_"$6":f",$3,$4,$5} else if ($2 < 0) {print $1"_"$6":r",$3,$4,$5}}' | tr " " "\n" > "$i"_reads.fq;
+  do awk -F$'\t' -v rgf=$rgf '{print "@"$1,$10,"+",$11}' "$i".tmp | sed '/^$/d' | tr " " "\n" > "$i"_reads.fq;
+    #ORIGINALxxx awk -F$'\t' -v rgf=$rgf '{print "@"$1,$9,$10,"+",$11,$rgf}' "$i".tmp | sed '/^$/d' | awk -F' ' '{if ($2 > 0) {print $1"_"$6":f",$3,$4,$5} else if ($2 < 0) {print $1"_"$6":r",$3,$4,$5}}' | tr " " "\n" > "$i"_reads.fq;
 
+    #create files containing single read pairs
     m=$(grep ^'@' "$i"_reads.fq | cut -d: -f1-9 | sort -u); #capture list of unique read pair names (includes also unpaired reads with unique names) 
     for j in $m;
       do echo "$i $j";
         fn=$(echo "$j" | sed 's/@//g' | tr ':' '_'); #filename for output
-        grep -A3 "$j" "$i"_reads.fq > "$i"_"$fn".rp.fq; #save read pair into its own reconstructed fastq file
+        #grep -A3 "$j" "$i"_reads.fq > "$i"_"$fn".rp.fq; #save read pair into its own reconstructed fastq file
+        grep -A3 "$j" "$i"_reads.fq | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/' > "$i"_"$fn".rp.fq; #save read pair into its own reconstructed fastq file, labeled as a read pair for bwa
+        #above, the first sed searches from 0 to the pattern then performs substitution 1 on the fastq defline, which causes the insertion of whitespace.  The second sed then searches the whole file and performs substitution 2 on the second fastq defline. \S means 'not whitespace'
       done;
     
     #rm "$i"_reads.fq; #clean up
     #rm "$i".tmp;
   done;
 
-#           Here is a sample reconstructed *.rp.fq file, note readgroup in col9 of name, and "orientation" or "endedness of read pair" in col10:
-#          @E00558:144:HHGCMCCXY:5:2224:6654:40055_RG:Z:55:r
+#          Here is a sample reconstructed *.rp.fq file for a single read pair:
+#          @E00558:144:HHGCMCCXY:5:2224:6654:40055 1:N:0:AAAAAA
 #          CAAAAATATTTTGGTAATTATTCTCAACAAAATGATTTGAAAGGTGTTCATACAACACAAATCGCCTAAGAGACTATGACGGTTTTATCCTCTGATTTGAATTGAGTTTGATCCAAGGGCTTCATATGATTGAAATATAC
 #          +
 #          FFJJJJAFJ<JJFF7FJAJAA-A7AJJJJJJ<JJJJJJJJJJFJJJJJJJJJJJ<JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJFFFAA
-#          @E00558:144:HHGCMCCXY:5:2224:6654:40055_RG:Z:55:f
+#          @E00558:144:HHGCMCCXY:5:2224:6654:40055 2:N:0:AAAAAA
 #          ATAAATATGCAAGGAGTCAAAAATATTTGGTAATTAAGCACAAAAACTGATTTGAAATGTGTTCGTACACCACAAATCACCTAAGAGACTATGACGGTTTTACCCTTTGATTTGAATTGAGTTTGATCCAAGGGCTTCATATGCTTTAAA
 #          +
 #          AAFFFJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJFJJJJJFFJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJFJJJJJJJJJJJJJ
@@ -258,16 +263,14 @@ echo "Realigning reads:"
 for i in $(find . -name "*.rp.fq" | cut -d'/' -f2 | sed 's/\.rp\.fq//g' | tr "\n" " ");
   do echo "$i";
     h=$(echo "$i" | cut -d_ -f1); #just the contig name
-    bwa mem "$h"_ref.txt "$i".rp.fq > "$i".sam; #write out human readable sam file
+    bwa mem -p -M "$h"_ref.txt "$i".rp.fq > "$i".sam; #write out human readable sam file (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
     samtools sort "$i.sam" -O BAM -o "$i".bam; #convert sam to bam
     sambamba index "$i".bam "$i".bam.bai;
 
-    #mapping quality changes upon realignment, extract only reads with new mapping quality > 60, excluding unmapped, convert those to proper fastq file
-    samtools view -F "$stF" -q "$stq" "$i".bam | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" > "$i".2xrp.fq;
+    #mapping quality changes upon realignment, extract only reads with new mapping quality > 60, excluding unmapped, convert those to proper fastq file and re-align again
+    samtools view -f "$stf" -F "$stF" -q "$stq" "$i".bam | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/' > "$i".2xrp.fq;
     if [[ $(cat "$i".2xrp.fq) != "" ]]; #only re-realign if there are reads left after latest quality filter
-    then bwa mem "$h"_ref.txt "$i".2xrp.fq > "$i".2x.sam; #perform second realignment
-      #samtools sort "$i.2x.sam" -O BAM -o "$i".2x.bam; #convert sam to bam
-      #sambamba index "$i".2x.bam "$i".2x.bam.bai;
+    then bwa mem -p -M "$h"_ref.txt "$i".2xrp.fq > "$i".2x.sam; #perform second realignment
     fi;
     
     #clean up
@@ -300,8 +303,8 @@ if [ ! -d "haplotypes" ]; then mkdir "haplotypes"; fi; #make a directory to hold
 for i in $(find . -name "*.2x.sam" | tr "\n" " ");
   do samin="$i";
     echo "$samin";
-    rname=$(echo "$samin" | rev | cut -d'/' -f1 | rev | sed 's/\.sam//g'); #get a root name for the read pair/contig alignment
-    mp=$(samtools mpileup "$samin"); #form the pileup file
+    rname=$(echo "$samin" | rev | cut -d'/' -f1 | rev | sed 's/\.2x.sam//g'); #get a root name for the read pair/contig alignment
+    mp=$(samtools mpileup -A "$samin"); #form the pileup file, use -A to include orphan reads. samtools mpileup by default excludes improper pairs. in hapx, bwa mem will find no proper pairs because too few reads are used during alignment
     
     #Extract the pos and base columns, remove read start ^., read end $, remove deletion indicators (e.g. -2AC, they are followed with *), pass to myinsertion subroutine to control insertions, then to myiupac to recode conflicts as ambiguous and produce the consensus sequence
     base1=$(echo "$mp" | cut -d$'\t' -f2,5 | sed 's/\^.//g' | sed 's/\$//g' | sed 's/-.*//g' | tr "\n" " " | myinsertion | myiupac); #first run at haplotype extraction, unpadded as of now
@@ -329,7 +332,7 @@ for i in $(find . -name "*.2x.sam" | tr "\n" " ");
     echo "$base3" > haplotypes/"$rname.fa";
     
     #clean up
-    rm "$samin";
+    #rm "$samin";
   done;
 
 
@@ -341,12 +344,12 @@ if [ ! -d "alignments" ]; then mkdir "alignments"; fi; #make a directory to hold
 ams=$(find ./haplotypes -name "*.2x.fa" | cut -d_ -f1-2 | sort -u | rev | cut -d'/' -f1 | rev);
 echo "$ams" | parallel 'cat ./haplotypes/{}_*.2x.fa > ./alignments/{}.mfa'; #concatenate all fasta haplotypes belonging to a single contig:range
 
+#final bwa-mem alignment in parallel
 pd=$(pwd); export pd;
 find $(pwd)"/alignments" -name "*.mfa" | rev | cut -d'/' -f1 | rev | parallel --env pd myalignhaps;
-#start here, do bwa-mem in parallel with *_ref.txt
 
 
 #clean up
-rm *_ref.txt*;
+#rm *_ref.txt*;
 
   

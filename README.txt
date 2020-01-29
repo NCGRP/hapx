@@ -21,7 +21,7 @@ sites = genomic positions to use [required]
      which specifies bp 303-304 of the contig named "jcf7180008454378" and bps 103-495 of contig "jcf7180008531951".
      Samtools view will not allow you to specify a single nucleotide position, so just use a 2bp range.
 alnr = aligner used to create bam file, options: gem bwamem
-inc = integer flag value for Samtools view -f option (properties of reads to include), see https://broadinstitute.github.io/picard/explain-flags.html [default=3, include reads that are paired and are mapped in a proper pair]
+inc = integer flag value for Samtools view -f option (properties of reads to include), see https://broadinstitute.github.io/picard/explain-flags.html [default=1, include paired reads. Avoid including proper pairs, bwa mem requires many reads to calculate a distribution from which "proper pairs" are determined. In hapx, individual read pairs are aligned to their contig, thus no such distribution can be calculated and bwa mem will not return any proper pairs]
 exc = integer flag value for Samtools view -F option (properties of reads to exclude) [default=3852, exclude unmapped reads && reads whose mate or pair is unmapped && not primary alignment && read fails platform/vendor quality checks && read is PCR or optical duplicate && supplementary alignment]
 qual = Samtools view -q option (minimum mapping quality of included reads) [default=60]
 
