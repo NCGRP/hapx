@@ -338,15 +338,42 @@ for i in $(find . -name "*.2x.sam" | tr "\n" " ");
 
 
 
-
-#Produce an alignment of the haplotypes to their reference, which might be viewed in something like IGV (Integrative Genomics Viewer)
+#Create the final multi fasta file containing the paired read haplotypes
 if [ ! -d "alignments" ]; then mkdir "alignments"; fi; #make a directory to hold fasta sequences containing extracted haplotypes
 ams=$(find ./haplotypes -name "*.2x.fa" | cut -d_ -f1-2 | sort -u | rev | cut -d'/' -f1 | rev);
 echo "$ams" | parallel 'cat ./haplotypes/{}_*.2x.fa > ./alignments/{}.mfa'; #concatenate all fasta haplotypes belonging to a single contig:range
 
+
+
+
+#linearize *.mfa file
+inf="jcf7180008531951_103-495";
+sed -e '/^>/s/$/@/' -e 's/^>/#/' "$inf".mfa | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' > "$inf".lmfa;
+#remove duplicates
+
+#remove identical subsequences
+rem="";
+while read llu;
+  do qu=$(echo "$llu" | cut -d' ' -f2); #get sequence string
+    qt=$(echo "$llu" | cut -d' ' -f1); #get sample name
+    ct=$(grep "$qu" "$inf".lmfa | wc -l); #count the number of lines that match the sequence string, if > 1 it is a substring and can be deleted
+    if [[ "$ct" > 1 ]];
+    then rem+="$llu"$'\n'; #add sequence to list to remove if it is a subsequence of other read pairs
+    fi;
+  done < "$inf".lmfa;
+rem=$(echo "$rem" | sed '/^$/d'); #remove trailing blank line
+
+grep -v -F -f <(echo "$rem") "$inf".lmfa
+
+
+
+
+#Produce a local alignment of the haplotypes to their reference using bwa, which might be viewed in something like IGV (Integrative Genomics Viewer).
+#Also produce some multiple alignments of haplotypes to each other using muscle
 #final bwa-mem alignment in parallel
 pd=$(pwd); export pd;
 find $(pwd)"/alignments" -name "*.mfa" | rev | cut -d'/' -f1 | rev | parallel --env pd myalignhaps;
+#final muscle alignment in parallel
 
 
 #clean up
