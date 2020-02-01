@@ -31,4 +31,3 @@ Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.f
 
 
 
-https://broadinstitute.github.io/picard/explain-flags.html
