@@ -116,34 +116,60 @@ myinsertion() {
 }
 export -f myinsertion;
 
+#myrealign takes the reads extracted from the primary alignment and realigns them independently to the contig as reference
+myrealign() {
+            i="$1";
+            echo "Realigning $i";
+            h=$(echo "$i" | cut -d_ -f1); #just the contig name
+            bwa mem -p -M "$pd"/"$h"_ref.txt "$pd"/"$i".rp.fq > "$pd"/"$i".sam 2>/dev/null; #write out human readable sam file (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
+            samtools sort "$pd"/"$i.sam" -O BAM -o "$pd"/"$i".bam 2>/dev/null; #convert sam to bam
+            sambamba index -q "$pd"/"$i".bam "$pd"/"$i".bam.bai;
+        
+            #mapping quality changes upon realignment, extract only reads with new mapping quality > 60, excluding unmapped, convert those to proper fastq file and re-align again
+            samtools view -f "$stf" -F "$stF" -q "$stq" "$pd"/"$i".bam  2>/dev/null | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/' > "$pd"/"$i".2xrp.fq;
+            if [[ $(cat "$pd"/"$i".2xrp.fq) != "" ]]; #only re-realign if there are reads left after latest quality filter
+            then bwa mem -p -M "$pd"/"$h"_ref.txt "$pd"/"$i".2xrp.fq > "$pd"/"$i".2x.sam 2>/dev/null; #perform second realignment
+            fi;
+            
+            #clean up
+            #rm "$pd"/"$i".sam "$pd"/"$i".bam "$pd"/"$i".bam.bai "$pd"/"$i".2xrp.fq "$pd"/"$i".rp.fq; #clean up
+}
+export -f myrealign;
+
 #mydedup() removes duplicate sequences, and subsequences that are exactly contained within longer sequences, from the processed multi fasta file
 mydedup() {
         #linearize *.mfa file and remove duplicate sequences
         inf="$1";
-        sed -e '/^>/s/$/@/' -e 's/^>/#/' "$pd"/alignments/"$inf".mfa | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}' \
-          | awk -F' ' '!_[$2]++' > "$pd"/alignments/"$inf".lmfa; #clever awk to remove lines with duplicates sequences in field 2. Also adds "rp*_" to start of read pair name so that it shows up as unique in downstream alignment viewers
         
-        #remove identical subsequences
-        rem="";
-        while read llu;
-          do qu=$(echo "$llu" | cut -d' ' -f2); #get sequence string
-            qt=$(echo "$llu" | cut -d' ' -f1); #get sample name
-            ct=$(grep "$qu" "$pd"/alignments/"$inf".lmfa | wc -l); #count the number of lines that match the sequence string, if > 1 it is a substring and can be deleted
-            if [[ "$ct" > 1 ]];
-            then rem+="$llu"$'\n'; #add sequence to list to remove if it is a subsequence of other read pairs
-            fi;
-          done < "$pd"/alignments/"$inf".lmfa;
-        rem=$(echo "$rem" | sed '/^$/d'); #remove trailing blank line
-        
-        if [[ "$rem" == "" ]];
-        then cat "$pd"/alignments/"$inf".lmfa | tr " " "\n" > "$pd"/alignments/"$inf".fa; #there are no identical subsequences so just copy to final file name
+        #retain all duplicate sequences and subsequences so that frequencies might be estimated when $dodedup=NO
+        if [[ "$dodedup" == "NO" ]]; 
+        then 
+          sed -e '/^>/s/$/@/' -e 's/^>/#/' "$pd"/alignments/"$inf".mfa | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}' | tr " " "\n" > "$pd"/alignments/"$inf".fa; 
         else
-          grep -v -F -f <(echo "$rem") "$pd"/alignments/"$inf".lmfa  | tr " " "\n" > "$pd"/alignments/"$inf".fa; #remove all lines that contain sequences that are subsequences of other lines
+          sed -e '/^>/s/$/@/' -e 's/^>/#/' "$pd"/alignments/"$inf".mfa | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}' \
+            | awk -F' ' '!_[$2]++' > "$pd"/alignments/"$inf".lmfa; #clever awk to remove lines with duplicate sequences in field 2. Also adds "rp*_" to start of read pair name so that it shows up as unique in downstream alignment viewers
+          
+          #remove identical subsequences
+          rem="";
+          while read llu;
+            do qu=$(echo "$llu" | cut -d' ' -f2); #get sequence string
+              qt=$(echo "$llu" | cut -d' ' -f1); #get sample name
+              ct=$(grep "$qu" "$pd"/alignments/"$inf".lmfa | wc -l); #count the number of lines that match the sequence string, if > 1 it is a substring and can be deleted
+              if [[ "$ct" > 1 ]];
+              then rem+="$llu"$'\n'; #add sequence to list to remove if it is a subsequence of other read pairs
+              fi;
+            done < "$pd"/alignments/"$inf".lmfa;
+          rem=$(echo "$rem" | sed '/^$/d'); #remove trailing blank line
+          
+          if [[ "$rem" == "" ]];
+          then cat "$pd"/alignments/"$inf".lmfa | tr " " "\n" > "$pd"/alignments/"$inf".fa; #there are no identical subsequences so just copy to final file name
+          else
+            grep -v -F -f <(echo "$rem") "$pd"/alignments/"$inf".lmfa  | tr " " "\n" > "$pd"/alignments/"$inf".fa; #remove all lines that contain sequences that are subsequences of other lines
+          fi;
+          rm "$pd"/alignments/"$inf".lmfa;
         fi;
         
-        
         rm "$pd"/alignments/"$inf".mfa;
-        rm "$pd"/alignments/"$inf".lmfa;
 }
 export -f mydedup;
 
@@ -169,8 +195,8 @@ myalignhaps() {
               if (( $le < 0 )); then le=1; fi; #no negative positions allowed
               re=$(( $(echo "$tt" | cut -d'-' -f2) + $longesth + $flankingl )); #determine the right end of the subsequence to extract from the reference contig
               
-              head -1 "$pd"/"$rr"_ref.txt > "$pd"/alignments/"$i".muscle; #add fasta header line of trimmed reference sequence for muscle alignment
-              grep -v ^'>' "$pd"/"$rr"_ref.txt | tr -d '\n' | cut -c"$le"-"$re" >> "$pd"/alignments/"$i".muscle; #add the trimmed subsequence to the fasta files for muscle alignment 
+              head -1 "$pd"/"$rr"_ref.txt | sed 's/$/_'$le'_'$re'/' > "$pd"/alignments/"$i".muscle; #add fasta header line of trimmed reference sequence with range noted for muscle alignment
+              grep -v ^'>' "$pd"/"$rr"_ref.txt | tr -d '\n' | cut -c"$le"-"$re" >> "$pd"/alignments/"$i".muscle; #add the trimmed reference subsequence to the fasta files for muscle alignment 
               cat "$pd"/alignments/"$i" >> "$pd"/alignments/"$i".muscle; #add processed haplotypes to multi fasta for muscle
               
               #cat "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" > "$pd"/alignments/"$i".muscle;
@@ -183,12 +209,72 @@ export -f myalignhaps;
 ##END SUBROUTINES##
 
 
-#acquire command line variables
-ref=$1; #path to the reference genome sequence in multi-fasta format
-bam=$2; #path to the bam file containing the alignment of reads to ref
-alnr=$3; #aligner used to create bam file (gem, bwamem)
-sites=$4; #genomic regions to use
+#define variables and establish defaults
+#ref, path to the reference genome sequence in multi-fasta format
+#bam, path to the bam file containing the alignment of reads to ref
+#alnr, aligner used to create bam file (gem, bwamem)
+#sites, genomic regions to use
+stf=1; #samtools view -f option
+stF=3852; #samtools view -F option, see https://broadinstitute.github.io/picard/explain-flags.html
+stq=60; #samtools view -q option
+dodedup=NO; #by default do not remove duplicate (sub)sequences
 
+#acquire command line variables
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+key="$1"
+
+case $key in
+    -r)
+    ref="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -b)
+    bam="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -a)
+    alnr="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -s)
+    sites="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -f)
+    stf="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -F)
+    stF="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -q)
+    stq="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -d)
+    dodedup=YES
+    shift # past argument
+    ;;
+    *)    # unknown option
+    POSITIONAL+=("$1") # save it in an array for later
+    shift # past argument
+    ;;
+esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+
+#process command line parameters
 if [[ "$alnr" == "gem" ]];
 then rgf=12; #read group info in field 12 for gem bam output
 elif [[ "$alnr" == "bwamem" ]];
@@ -197,51 +283,23 @@ else echo "Unrecognized aligner: $alnr.  Quitting...";
   return;
   exit;
 fi;
-
-stf=1; #samtools view -f option
-stF=3852; #samtools view -F option
-stq=60; #samtools view -q option
+export dodedup stf stF stq;
 e=$(echo "$sites" | tr "," "\n"); #format sites for proper parsing by samtools view
 
-
-
-
-#          while [[ "$#" -gt 0 ]]; do case $1 in
-#            -d|--deploy) deploy="$2"; shift;;
-#            -u|--uglify) uglify=1;;
-#            *) echo "Unknown parameter passed: $1"; exit 1;;
-#          esac; shift; done
-#          
-#          echo "Should deploy? $deploy"
-#          echo "Should uglify? $uglify"
-#          
-#          
-#          
-#          
-#          
-#          
-#          
-#          
-#          
-#          while [[ "$#" -gt 0 ]]; do case $1 in
-#            -d|--deploy) deploy="$2"; shift;;
-#            -u|--uglify) uglify=1;;
-#            *) echo "Unknown parameter passed: $1"; exit 1;;
-#          esac; shift; done
-#          
-#          echo "Should deploy? $deploy"
-#          echo "Should uglify? $uglify"
+#log
+echo "Reference sequence: $ref";
+echo "Alignment software, alignment file (bam): $alnr, $bam";
+echo "Target sites: $sites";
+echo "samtools view -f $stf";
+echo "samtools view -F $stF";
+echo "samtools view -q $stq";
+echo "Remove duplicate hapblocks: $dodedup";
 
 
 
 
 
-
-
-
-
-
-#extract read pairs at site using samtools. Include read pairs (1) and proper pairs (+2= -f 3) with mapping quality > 60 (-q 60) excluding unmapped reads (4) and reads whose mate is unmapped (+8= 
+#extract read pairs at site using samtools. Obey include, exclude and quality rules from command line
 echo "$e" | parallel 'samtools view -f '"$stf"' -F '"$stF"' -q '"$stq"' '"$bam"' "{}" | sort > {}.tmp; \
   mv {}.tmp $(echo {} | tr ":" "_").tmp';
   
@@ -311,22 +369,46 @@ for i in $(echo "$g" | cut -d' ' -f1 | tr ':' '_' | tr '\n' ' ');
 #this step aligns, then verifies mapping quality since it changes from the original values, then realigns
 #This step should probably be parallelized
 echo "Realigning reads:"
-for i in $(find . -name "*.rp.fq" | cut -d'/' -f2 | sed 's/\.rp\.fq//g' | tr "\n" " ");
-  do echo "Realigning $i";
-    h=$(echo "$i" | cut -d_ -f1); #just the contig name
-    bwa mem -p -M "$h"_ref.txt "$i".rp.fq > "$i".sam 2>/dev/null; #write out human readable sam file (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
-    samtools sort "$i.sam" -O BAM -o "$i".bam 2>/dev/null; #convert sam to bam
-    sambamba index -q "$i".bam "$i".bam.bai;
 
-    #mapping quality changes upon realignment, extract only reads with new mapping quality > 60, excluding unmapped, convert those to proper fastq file and re-align again
-    samtools view -f "$stf" -F "$stF" -q "$stq" "$i".bam  2>/dev/null | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/' > "$i".2xrp.fq;
-    if [[ $(cat "$i".2xrp.fq) != "" ]]; #only re-realign if there are reads left after latest quality filter
-    then bwa mem -p -M "$h"_ref.txt "$i".2xrp.fq > "$i".2x.sam 2>/dev/null; #perform second realignment
-    fi;
-    
-    #clean up
-    #rm "$i".sam "$i".bam "$i".bam.bai "$i".2xrp.fq "$i".rp.fq; #clean up
-  done;
+
+
+
+
+
+
+
+
+pd=$(pwd); export pd;
+find . -name "*.rp.fq" | cut -d'/' -f2 | sed 's/\.rp\.fq//g' | tr "\n" " " | parallel --env pd --env stf --env stF --env stq --pipe -N1 myrealign;
+
+
+#for i in $(find . -name "*.rp.fq" | cut -d'/' -f2 | sed 's/\.rp\.fq//g' | tr "\n" " ");
+#  do echo "Realigning $i";
+#    h=$(echo "$i" | cut -d_ -f1); #just the contig name
+#    bwa mem -p -M "$h"_ref.txt "$i".rp.fq > "$i".sam 2>/dev/null; #write out human readable sam file (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
+#    samtools sort "$i.sam" -O BAM -o "$i".bam 2>/dev/null; #convert sam to bam
+#    sambamba index -q "$i".bam "$i".bam.bai;
+#
+#    #mapping quality changes upon realignment, extract only reads with new mapping quality > 60, excluding unmapped, convert those to proper fastq file and re-align again
+#    samtools view -f "$stf" -F "$stF" -q "$stq" "$i".bam  2>/dev/null | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/' > "$i".2xrp.fq;
+#    if [[ $(cat "$i".2xrp.fq) != "" ]]; #only re-realign if there are reads left after latest quality filter
+#    then bwa mem -p -M "$h"_ref.txt "$i".2xrp.fq > "$i".2x.sam 2>/dev/null; #perform second realignment
+#    fi;
+#    
+#    #clean up
+#    #rm "$i".sam "$i".bam "$i".bam.bai "$i".2xrp.fq "$i".rp.fq; #clean up
+#  done;
+
+
+
+
+
+
+
+
+
+
+
 
 
 #turn on some diagnostic code by un-commenting:
@@ -403,12 +485,12 @@ echo "$ams" | parallel 'cat ./haplotypes/{}_*.fa > ./alignments/{}.mfa'; #concat
 
 #Remove duplicate sequences and identical subsequences
 pd=$(pwd); export pd;
-find "$pd"/alignments -name "*.mfa" | rev | cut -d'/' -f1 | rev | cut -d. -f1 | parallel --env pd mydedup;
+find "$pd"/alignments -name "*.mfa" | rev | cut -d'/' -f1 | rev | cut -d. -f1 | parallel --env pd --env dodedup mydedup;
 
 
 
 #Produce a local alignment of the haplotypes to their reference using bwa, which might be viewed in something like IGV (Integrative Genomics Viewer).
-#Also produce some multiple alignments of haplotypes to each other using muscle
+#Also produce a multiple alignment of haplotypes to each other using muscle
 #final bwa-mem and muscle alignments in parallel
 find "$pd"/alignments -name "*.fa" | rev | cut -d'/' -f1 | rev | parallel --env pd myalignhaps;
 
