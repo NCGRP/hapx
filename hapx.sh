@@ -182,6 +182,7 @@ myalignhaps() {
               tt=$(echo "$ss" | cut -d'_' -f2); #siterange, e.g. 303-304
 
               #perform final mapping with bwa
+              echo "Final mapping with bwa: $i";
               bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" 2>/dev/null | samtools sort -O BAM --threads "$thr" -o "$pd"/alignments/"$ss"_aligned_haps.bam0 2>/dev/null;
               samtools view -F 2048 -O BAM "$pd"/alignments/"$ss"_aligned_haps.bam0 -o "$pd"/alignments/"$ss"_aligned_haps.bam 2>/dev/null; #remove secondary/supplementary alignments (-F 2048)
               sambamba index -q "$pd"/alignments/"$ss"_aligned_haps.bam "$pd"/alignments/"$ss"_aligned_haps.bam.bai;
@@ -200,7 +201,7 @@ myalignhaps() {
               cat "$pd"/alignments/"$i" >> "$pd"/alignments/"$i".muscle; #add processed haplotypes to multi fasta for muscle
               
               #cat "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" > "$pd"/alignments/"$i".muscle;
-              echo "muscle: $i";
+              echo "Multiple alignment with muscle: $i";
               muscle -quiet -in "$pd"/alignments/"$i".muscle -fastaout "$pd"/alignments/"$ss"_aligned_haps.fa;
 }
 export -f myalignhaps;
@@ -283,7 +284,10 @@ else echo "Unrecognized aligner: $alnr.  Quitting...";
   return;
   exit;
 fi;
-export dodedup stf stF stq;
+export dodedup;
+export stf;
+export stF; 
+export stq;
 e=$(echo "$sites" | tr "," "\n"); #format sites for proper parsing by samtools view
 
 #log
@@ -379,7 +383,7 @@ echo "Realigning reads:"
 
 
 pd=$(pwd); export pd;
-find . -name "*.rp.fq" | cut -d'/' -f2 | sed 's/\.rp\.fq//g' | tr "\n" " " | parallel --env pd --env stf --env stF --env stq --pipe -N1 myrealign;
+find . -name "*.rp.fq" | cut -d'/' -f2 | sed 's/\.rp\.fq//g' | parallel --env pd --env stf --env stF --env stq myrealign;
 
 
 #for i in $(find . -name "*.rp.fq" | cut -d'/' -f2 | sed 's/\.rp\.fq//g' | tr "\n" " ");
