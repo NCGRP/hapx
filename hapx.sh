@@ -136,6 +136,48 @@ myrealign() {
 }
 export -f myrealign;
 
+#mymakehapblocks() processes read pairs into a single contiguous sequence, adds NNNs where opposing read pairs do not overlap to pad relative to the reference, adds IUPAC redundancy codes for conflicts between pairs of a read, removes deletion coding, retains insertions
+mymakehapblocks() {
+    samin="$1";
+    echo "Haploblocking $samin";
+    rname=$(echo "$samin" | rev | cut -d'/' -f1 | rev | sed 's/\.2x.sam//g'); #get a root name for the read pair/contig alignment
+    mp=$(samtools mpileup -A "$pd"/"$samin" 2>/dev/null); #form the pileup file, use -A to include orphan reads. samtools mpileup by default excludes improper pairs. in hapx, bwa mem will find no proper pairs because too few reads are used during alignment
+    
+    #Extract the pos and base columns, remove read start ^., read end $, remove deletion indicators (e.g. -2AC, they are followed with *), pass to myinsertion subroutine to control insertions, then to myiupac to recode conflicts as ambiguous and produce the consensus sequence
+    base1=$(echo "$mp" | cut -d$'\t' -f2,5 | sed 's/\^.//g' | sed 's/\$//g' | sed 's/-.*//g' | tr "\n" " " | myinsertion | myiupac); #haplotype extraction, unpadded as of now
+    
+    #Deal with contiguity and padding
+    csq=$(conseq "$(echo "$mp" | cut -d$'\t' -f2)" | grep -v "^1\-" | sed 's/-/ 1 /g'); #identify regions where reads are not aligned consecutively to the reference, exclude the range from 1-start of overlap, set up to use as in interval for seq command
+    
+    if [[ "$csq" == "" ]];
+    then pads=""; #no pads if no non-contiguous sections
+    else pads=$(while read isq;
+      do for i in $(seq $isq);
+           do echo "$i N";
+           done;
+      done <<<"$csq"; #possible multi lines of non-contiguous regions that need to be padded with NNNNs
+      );
+    fi;
+    
+    #combine to pad haplotype with respect to reference, convert x for deletion to - for deletion
+    #base 2 contains the processed haplotype in a pileup like format relative to reference
+    base2=$(echo "$base1"$'\n'"$pads" | sort -t$' ' | sed 's/x/-/g' | awk 'NF');
+    
+    #revise the read pair name so that readgroup appears in front
+    nrname1=$(echo "$rname" | rev | cut -d'_' -f1-3 | rev); #readgroup info from end of string
+    nrname2=$(echo "$rname" | rev | cut -d'_' -f4- | rev); #rest of string, excluding readgroup info
+    nrname="$nrname1"_"$nrname2";
+    
+    #base3 contains the processed haplotype as a fasta file, deletions relative to reference removed.
+    #base3 is as close as we can come to reconstructing the native molecule
+    base3=$(echo ">$nrname";echo "$base2" | cut -d' ' -f2 | grep -v '-' | tr "\n" " " | sed 's/ //g');
+    echo "$base3" > "$pd"/haplotypes/"$rname.fa";
+    
+    #clean up
+    #rm "$samin";
+}
+export -f mymakehapblocks;
+
 #mydedup() removes duplicate sequences, and subsequences that are exactly contained within longer sequences, from the processed multi fasta file
 mydedup() {
         #linearize *.mfa file and remove duplicate sequences
@@ -175,13 +217,15 @@ mydedup() {
           ni=$(( ($ts1/2) - $ts2 )); #number of identical sequences
           ns=$(( $ts2 - ($ts3/2) )); #number of identical subsequences
           
+          #report counts to parallel statement
+          echo "$inf"$'\t'"$ts1":"$ni":"$ns";
           
-          #rm "$pd"/alignments/"$inf".lmfa;
+          #clean up
+          rm "$pd"/alignments/"$inf".lmfa;
         fi;
         
-        #rm "$pd"/alignments/"$inf".mfa;
-        
-        echo "$inf"$'\t'"$ts1":"$ni":"$ns";
+        #clean up
+        rm "$pd"/alignments/"$inf".mfa;
 }
 export -f mydedup;
 
@@ -231,6 +275,7 @@ stf=1; #samtools view -f option
 stF=3852; #samtools view -F option, see https://broadinstitute.github.io/picard/explain-flags.html
 stq=60; #samtools view -q option
 dodedup=NO; #by default do not remove duplicate (sub)sequences
+pd=$(pwd); export pd; #path to working directory
 
 #acquire command line variables
 POSITIONAL=()
@@ -296,11 +341,11 @@ else echo "Unrecognized aligner: $alnr.  Quitting...";
   return;
   exit;
 fi;
+e=$(echo "$sites" | tr "," "\n"); #format sites for proper parsing by samtools view
 export dodedup;
 export stf;
 export stF; 
 export stq;
-e=$(echo "$sites" | tr "," "\n"); #format sites for proper parsing by samtools view
 
 #log
 date > log.txt;
@@ -390,7 +435,6 @@ for i in $(echo "$g" | cut -d' ' -f1 | tr ':' '_' | tr '\n' ' ');
 #This step should probably be parallelized
 echo "Realigning reads:"
 
-pd=$(pwd); export pd;
 find . -name "*.rp.fq" | cut -d'/' -f2 | sed 's/\.rp\.fq//g' | parallel --env pd --env stf --env stF --env stq myrealign;
 
 
@@ -426,47 +470,17 @@ find . -name "*.rp.fq" | cut -d'/' -f2 | sed 's/\.rp\.fq//g' | parallel --env pd
 #Process alignments of paired reads via mpileup into a single padded consensus sequence representing the haplotype
 if [ ! -d "haplotypes" ]; then mkdir "haplotypes"; fi; #make a directory to hold fasta sequences containing extracted haplotypes
 
-#Could also parallelize this
-echo "Processing mapped reads into haplotype blocks:";
-for i in $(find . -name "*.2x.sam" | tr "\n" " ");
-  do samin="$i";
-    echo "Haploblocking $samin";
-    rname=$(echo "$samin" | rev | cut -d'/' -f1 | rev | sed 's/\.2x.sam//g'); #get a root name for the read pair/contig alignment
-    mp=$(samtools mpileup -A "$samin" 2>/dev/null); #form the pileup file, use -A to include orphan reads. samtools mpileup by default excludes improper pairs. in hapx, bwa mem will find no proper pairs because too few reads are used during alignment
-    
-    #Extract the pos and base columns, remove read start ^., read end $, remove deletion indicators (e.g. -2AC, they are followed with *), pass to myinsertion subroutine to control insertions, then to myiupac to recode conflicts as ambiguous and produce the consensus sequence
-    base1=$(echo "$mp" | cut -d$'\t' -f2,5 | sed 's/\^.//g' | sed 's/\$//g' | sed 's/-.*//g' | tr "\n" " " | myinsertion | myiupac); #haplotype extraction, unpadded as of now
-    
-    #Deal with contiguity and padding
-    csq=$(conseq "$(echo "$mp" | cut -d$'\t' -f2)" | grep -v "^1\-" | sed 's/-/ 1 /g'); #identify regions where reads are not aligned consecutively to the reference, exclude the range from 1-start of overlap, set up to use as in interval for seq command
-    
-    if [[ "$csq" == "" ]];
-    then pads=""; #no pads if no non-contiguous sections
-    else pads=$(while read isq;
-      do for i in $(seq $isq);
-           do echo "$i N";
-           done;
-      done <<<"$csq"; #possible multi lines of non-contiguous regions that need to be padded with NNNNs
-      );
-    fi;
-    
-    #combine to pad haplotype with respect to reference, convert x for deletion to - for deletion
-    #base 2 contains the processed haplotype in a pileup like format relative to reference
-    base2=$(echo "$base1"$'\n'"$pads" | sort -t$' ' | sed 's/x/-/g' | awk 'NF');
-    
-    #revise the read pair name so that readgroup appears in front
-    nrname1=$(echo "$rname" | rev | cut -d'_' -f1-3 | rev); #readgroup info from end of string
-    nrname2=$(echo "$rname" | rev | cut -d'_' -f4- | rev); #rest of string, excluding readgroup info
-    nrname="$nrname1"_"$nrname2";
-    
-    #base3 contains the processed haplotype as a fasta file, deletions relative to reference removed.
-    #base3 is as close as we can come to reconstructing the native molecule
-    base3=$(echo ">$nrname";echo "$base2" | cut -d' ' -f2 | grep -v '-' | tr "\n" " " | sed 's/ //g');
-    echo "$base3" > haplotypes/"$rname.fa";
-    
-    #clean up
-    #rm "$samin";
-  done;
+echo "Processing mapped reads into hapblocks:";
+find . -name "*.2x.sam" | parallel --env pd mymakehapblocks;
+
+
+
+
+
+
+
+
+
 
 
 
@@ -478,9 +492,11 @@ echo "$ams" | parallel 'cat ./haplotypes/{}_*.fa > ./alignments/{}.mfa'; #concat
 
 
 #Remove duplicate sequences and identical subsequences
-if [[ "$dodedup" == YES ]]; then echo "Removing duplicates:"; fi;
+if [[ "$dodedup" == YES ]];
+then echo "Removing duplicates:";
+else echo "Site"$'\t'"NumReads:NumIdenticalReads:NumIdenticalSubsequences" >> log.txt;
+fi;
 pd=$(pwd); export pd;
-echo "Site"$'\t'"NumReads:NumIdenticalReads:NumIdenticalSubsequences" >> log.txt
 (find "$pd"/alignments -name "*.mfa" | rev | cut -d'/' -f1 | rev | cut -d. -f1 | parallel --env pd --env dodedup mydedup) >> log.txt;
 
 
