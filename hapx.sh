@@ -149,6 +149,7 @@ mydedup() {
           sed -e '/^>/s/$/@/' -e 's/^>/#/' "$pd"/alignments/"$inf".mfa | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}' \
             | awk -F' ' '!_[$2]++' > "$pd"/alignments/"$inf".lmfa; #clever awk to remove lines with duplicate sequences in field 2. Also adds "rp*_" to start of read pair name so that it shows up as unique in downstream alignment viewers
           
+          
           #remove identical subsequences
           rem="";
           while read llu;
@@ -166,10 +167,21 @@ mydedup() {
           else
             grep -v -F -f <(echo "$rem") "$pd"/alignments/"$inf".lmfa  | tr " " "\n" > "$pd"/alignments/"$inf".fa; #remove all lines that contain sequences that are subsequences of other lines
           fi;
-          rm "$pd"/alignments/"$inf".lmfa;
+          
+          #count identical sequences and subsequences removed
+          ts1=$(wc -l "$pd"/alignments/"$inf".mfa | cut -d' ' -f1); #number of sequences at start (2 lines per sequence)
+          ts2=$(wc -l "$pd"/alignments/"$inf".lmfa | cut -d' ' -f1); #number of sequences after removing identical
+          ts3=$(wc -l "$pd"/alignments/"$inf".fa | cut -d' ' -f1);  #number of sequence after removing identical and subsequences (2 lines per sequence_
+          ni=$(( ($ts1/2) - $ts2 )); #number of identical sequences
+          ns=$(( $ts2 - ($ts3/2) )); #number of identical subsequences
+          
+          
+          #rm "$pd"/alignments/"$inf".lmfa;
         fi;
         
-        rm "$pd"/alignments/"$inf".mfa;
+        #rm "$pd"/alignments/"$inf".mfa;
+        
+        echo "$inf"$'\t'"$ts1":"$ni":"$ns";
 }
 export -f mydedup;
 
@@ -291,23 +303,27 @@ export stq;
 e=$(echo "$sites" | tr "," "\n"); #format sites for proper parsing by samtools view
 
 #log
-echo "Reference sequence: $ref";
-echo "Alignment software, alignment file (bam): $alnr, $bam";
-echo "Target sites: $sites";
-echo "samtools view -f $stf";
-echo "samtools view -F $stF";
-echo "samtools view -q $stq";
-echo "Remove duplicate hapblocks: $dodedup";
+date > log.txt;
+echo >> log.txt;
+echo "Reference sequence: $ref" >> log.txt;
+echo "Alignment software: $alnr" >> log.txt;
+echo "Alignment file (bam): $bam" >> log.txt;
+echo "Target sites: $sites" >> log.txt;
+echo "samtools view -f $stf" >> log.txt;
+echo "samtools view -F $stF" >> log.txt;
+echo "samtools view -q $stq" >> log.txt;
+echo "Remove duplicate hapblocks: $dodedup" >> log.txt;
+echo >> log.txt;
 
 
 
 
 
-#extract read pairs at site using samtools. Obey include, exclude and quality rules from command line
+#extract read pairs at target sites using samtools. Obey include, exclude and quality rules from command line
 echo "$e" | parallel 'samtools view -f '"$stf"' -F '"$stF"' -q '"$stq"' '"$bam"' "{}" | sort > {}.tmp; \
   mv {}.tmp $(echo {} | tr ":" "_").tmp';
   
-#describe number of read pairs and single ends of a read pair extracted in a tabular format
+#describe number of read pairs and single ends of a read pair that have met the samtools -f/-F/-q rules, extracted into a tabular format
 f=$(while read j;
   do
     fn=$(echo "$j" | tr ":" "_")".tmp"; #name of input file
@@ -317,8 +333,8 @@ f=$(while read j;
     ss=$(echo "$s" | awk 'NF' | wc -l); #number of single ends of paired reads
     echo "$j $pp $ss";
   done <<<"$e";)
-echo "Number of reads found at sites:"$'\n'"contig:sites pairedreads singlereads"$'\n'"$f"$'\n';
-echo "Number of reads found at sites:"$'\n'"contig:sites pairedreads singlereads"$'\n'"$f" > ReadReport.txt;
+echo "Number of reads found at sites:"$'\n'"contig:sites pairedreads singlereads"$'\n'"$f" >> log.txt;
+echo >> log.txt;
 
 #           sample output:
 #           Number of reads found at sites
@@ -374,34 +390,8 @@ for i in $(echo "$g" | cut -d' ' -f1 | tr ':' '_' | tr '\n' ' ');
 #This step should probably be parallelized
 echo "Realigning reads:"
 
-
-
-
-
-
-
-
-
 pd=$(pwd); export pd;
 find . -name "*.rp.fq" | cut -d'/' -f2 | sed 's/\.rp\.fq//g' | parallel --env pd --env stf --env stF --env stq myrealign;
-
-
-#for i in $(find . -name "*.rp.fq" | cut -d'/' -f2 | sed 's/\.rp\.fq//g' | tr "\n" " ");
-#  do echo "Realigning $i";
-#    h=$(echo "$i" | cut -d_ -f1); #just the contig name
-#    bwa mem -p -M "$h"_ref.txt "$i".rp.fq > "$i".sam 2>/dev/null; #write out human readable sam file (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
-#    samtools sort "$i.sam" -O BAM -o "$i".bam 2>/dev/null; #convert sam to bam
-#    sambamba index -q "$i".bam "$i".bam.bai;
-#
-#    #mapping quality changes upon realignment, extract only reads with new mapping quality > 60, excluding unmapped, convert those to proper fastq file and re-align again
-#    samtools view -f "$stf" -F "$stF" -q "$stq" "$i".bam  2>/dev/null | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/' > "$i".2xrp.fq;
-#    if [[ $(cat "$i".2xrp.fq) != "" ]]; #only re-realign if there are reads left after latest quality filter
-#    then bwa mem -p -M "$h"_ref.txt "$i".2xrp.fq > "$i".2x.sam 2>/dev/null; #perform second realignment
-#    fi;
-#    
-#    #clean up
-#    #rm "$i".sam "$i".bam "$i".bam.bai "$i".2xrp.fq "$i".rp.fq; #clean up
-#  done;
 
 
 
@@ -488,8 +478,10 @@ echo "$ams" | parallel 'cat ./haplotypes/{}_*.fa > ./alignments/{}.mfa'; #concat
 
 
 #Remove duplicate sequences and identical subsequences
+if [[ "$dodedup" == YES ]]; then echo "Removing duplicates:"; fi;
 pd=$(pwd); export pd;
-find "$pd"/alignments -name "*.mfa" | rev | cut -d'/' -f1 | rev | cut -d. -f1 | parallel --env pd --env dodedup mydedup;
+echo "Site"$'\t'"NumReads:NumIdenticalReads:NumIdenticalSubsequences" >> log.txt
+(find "$pd"/alignments -name "*.mfa" | rev | cut -d'/' -f1 | rev | cut -d. -f1 | parallel --env pd --env dodedup mydedup) >> log.txt;
 
 
 
