@@ -188,44 +188,55 @@ mydedup() {
         then 
           sed -e '/^>/s/$/@/' -e 's/^>/#/' "$pd"/alignments/"$inf".mfa | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}' | tr " " "\n" > "$pd"/alignments/"$inf".fa; 
         else
-          sed -e '/^>/s/$/@/' -e 's/^>/#/' "$pd"/alignments/"$inf".mfa | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}' \
-            | awk -F' ' '!_[$2]++' > "$pd"/alignments/"$inf".lmfa; #clever awk to remove lines with duplicate sequences in field 2. Also adds "rp*_" to start of read pair name so that it shows up as unique in downstream alignment viewers
+          
+          # to this process supply each read group separately, and everything together
+          da=$(sed -e '/^>/s/$/@/' -e 's/^>/#/' "$pd"/alignments/"$inf".mfa | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}'); #linearize the data set
+          rgs=$(echo "$da" | cut -d'_' -f2-4 | sort -u | tr '\n' ' '); #acquire a list of readgroups
+          rgs="$rgs>rp"; #add an item to the list of readgroups that will allow all sequences to be grepped from the file '>rp'
+          
+#          sed -e '/^>/s/$/@/' -e 's/^>/#/' "$pd"/alignments/"$inf".mfa | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}' \
+#            | awk -F' ' '!_[$2]++' > "$pd"/alignments/"$inf".lmfa; #clever awk to remove lines with duplicate sequences in field 2. Also adds "rp*_" to start of read pair name so that it shows up as unique in downstream alignment viewers
           
           
-          #remove identical subsequences
-          rem="";
-          while read llu;
-            do qu=$(echo "$llu" | cut -d' ' -f2); #get sequence string
-              qt=$(echo "$llu" | cut -d' ' -f1); #get sample name
-              ct=$(grep "$qu" "$pd"/alignments/"$inf".lmfa | wc -l); #count the number of lines that match the sequence string, if > 1 it is a substring and can be deleted
-              if [[ "$ct" > 1 ]];
-              then rem+="$llu"$'\n'; #add sequence to list to remove if it is a subsequence of other read pairs
-              fi;
-            done < "$pd"/alignments/"$inf".lmfa;
-          rem=$(echo "$rem" | sed '/^$/d'); #remove trailing blank line
+          for i in $rgs;
+          do echo "$da" | grep "$i"  > "$pd"/alignments/"$inf"."$i".mfa; #make a readgroup specific mfa file. this has all haploblocks, including duplicated and subsequence
+            echo "$da" | grep "$i" | awk -F' ' '!_[$2]++' > "$pd"/alignments/"$inf"."$i".lmfa; #make a readgroup specific, linearized lmfa file. this has end-to-end identical sequences removed via the clever awk clause 
           
-          if [[ "$rem" == "" ]];
-          then cat "$pd"/alignments/"$inf".lmfa | tr " " "\n" > "$pd"/alignments/"$inf".fa; #there are no identical subsequences so just copy to final file name
-          else
-            grep -v -F -f <(echo "$rem") "$pd"/alignments/"$inf".lmfa  | tr " " "\n" > "$pd"/alignments/"$inf".fa; #remove all lines that contain sequences that are subsequences of other lines
-          fi;
+            #remove identical subsequences
+            rem="";
+            while read llu;
+              do qu=$(echo "$llu" | cut -d' ' -f2); #get sequence string
+                qt=$(echo "$llu" | cut -d' ' -f1); #get sample name
+                ct=$(grep "$qu" "$pd"/alignments/"$inf"."$i".lmfa | wc -l); #count the number of lines that match the sequence string, if > 1 it is a substring and can be deleted
+                if [[ "$ct" > 1 ]];
+                then rem+="$llu"$'\n'; #add sequence to list to remove if it is a subsequence of other read pairs
+                fi;
+              done < "$pd"/alignments/"$inf"."$i".lmfa;
+            rem=$(echo "$rem" | sed '/^$/d'); #remove trailing blank line
           
-          #count identical sequences and subsequences removed
-          ts1=$(wc -l "$pd"/alignments/"$inf".mfa | cut -d' ' -f1); #number of sequences at start (2 lines per sequence)
-          ts2=$(wc -l "$pd"/alignments/"$inf".lmfa | cut -d' ' -f1); #number of sequences after removing identical
-          ts3=$(wc -l "$pd"/alignments/"$inf".fa | cut -d' ' -f1);  #number of sequence after removing identical and subsequences (2 lines per sequence_
-          ni=$(( ($ts1/2) - $ts2 )); #number of identical sequences
-          ns=$(( $ts2 - ($ts3/2) )); #number of identical subsequences
+            if [[ "$rem" == "" ]];
+            then cat "$pd"/alignments/"$inf"."$i".lmfa | tr " " "\n" > "$pd"/alignments/"$inf"."$i".fa; #there are no identical subsequences so just copy to a final file name
+            else
+              grep -v -F -f <(echo "$rem") "$pd"/alignments/"$inf"."$i".lmfa | tr " " "\n" > "$pd"/alignments/"$inf"."$i".fa; #remove all lines that contain sequences that are subsequences of other lines
+            fi;
           
-          #report counts to parallel statement
-          echo "$inf"$'\t'"$ts1":"$ni":"$ns";
+            #count identical sequences and subsequences removed
+            ts1=$(wc -l "$pd"/alignments/"$inf"."$i".mfa | cut -d' ' -f1); #number of sequences at start
+            ts2=$(wc -l "$pd"/alignments/"$inf"."$i".lmfa | cut -d' ' -f1); #number of sequences after removing identical
+            ts3=$(wc -l "$pd"/alignments/"$inf"."$i".fa | cut -d' ' -f1);  #number of sequence after removing identical and subsequences (2 lines per sequence)
+            ni=$(( $ts1 - $ts2 )); #number of identical sequences
+            ns=$(( $ts2 - ($ts3/2) )); #number of identical subsequences
+
+            #report counts to parallel statement
+            echo "$inf"."$i" $'\t'"$ts1":"$ni":"$ns" | sed 's/>rp/global/'; #replace grep item '>rp' for retrieving all sequences with "global", meaning all unique haplotypes are counted when "global" is reported
           
-          #clean up
-          rm "$pd"/alignments/"$inf".lmfa;
-        fi;
+            #clean up
+            #rm "$pd"/alignments/"$inf"."$i".lmfa;
+           done;
+         fi;
         
         #clean up
-        rm "$pd"/alignments/"$inf".mfa;
+        #rm "$pd"/alignments/"$inf".mfa;
 }
 export -f mydedup;
 
@@ -252,13 +263,22 @@ myalignhaps() {
               if (( $le < 0 )); then le=1; fi; #no negative positions allowed
               re=$(( $(echo "$tt" | cut -d'-' -f2) + $longesth + $flankingl )); #determine the right end of the subsequence to extract from the reference contig
               
-              head -1 "$pd"/"$rr"_ref.txt | sed 's/$/_'$le'_'$re'/' > "$pd"/alignments/"$i".muscle; #add fasta header line of trimmed reference sequence with range noted for muscle alignment
+              refname=$(head -1 "$pd"/"$rr"_ref.txt | sed 's/$/_'$le'_'$re'/'); #name for reference sequence fragment to be included in muscle alignment
+              echo "$refname" > "$pd"/alignments/"$i".muscle; #add fasta header line of trimmed reference sequence with range noted for muscle alignment
               grep -v ^'>' "$pd"/"$rr"_ref.txt | tr -d '\n' | cut -c"$le"-"$re" >> "$pd"/alignments/"$i".muscle; #add the trimmed reference subsequence to the fasta files for muscle alignment 
               cat "$pd"/alignments/"$i" >> "$pd"/alignments/"$i".muscle; #add processed haplotypes to multi fasta for muscle
               
               #cat "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" > "$pd"/alignments/"$i".muscle;
               echo "Multiple alignment with muscle: $i";
-              muscle -quiet -in "$pd"/alignments/"$i".muscle -fastaout "$pd"/alignments/"$ss"_aligned_haps.fa;
+              muscle -quiet -in "$pd"/alignments/"$i".muscle -fastaout "$pd"/alignments/"$ss"_aligned_haps.faTMP;
+              
+              #put reference sequence at top of muscle output file and sort by read group
+              sed -e '/^>/s/$/@/' -e 's/^>/#>/' "$pd"/alignments/"$ss"_aligned_haps.faTMP | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' > "$pd"/alignments/"$ss"_aligned_haps.faTMP1; #make output 1 line per sequence
+              grep ^"$refname" "$pd"/alignments/"$ss"_aligned_haps.faTMP1 | tr " " "\n" > "$pd"/alignments/"$ss"_aligned_haps.fa; #get the linearized reference sequence fragment, add to top of muscle output
+              grep -v ^"$refname" "$pd"/alignments/"$ss"_aligned_haps.faTMP1 | sort -t'_' -k4,4 | tr " " "\n" >>  "$pd"/alignments/"$ss"_aligned_haps.fa; #sort muscle aligned haplotypes, add to revised muscle output
+              
+              #clean up
+              rm "$pd"/alignments/"$ss"_aligned_haps.faTMP "$pd"/alignments/"$ss"_aligned_haps.faTMP1;
 }
 export -f myalignhaps;
 
@@ -432,9 +452,7 @@ for i in $(echo "$g" | cut -d' ' -f1 | tr ':' '_' | tr '\n' ' ');
 
 #align *.rp.fq to *_ref.txt, output as bam file, then sambamba index (output files have names like jcf7180008378511_277.bam (contigname_site.bam)
 #this step aligns, then verifies mapping quality since it changes from the original values, then realigns
-#This step should probably be parallelized
 echo "Realigning reads:"
-
 find . -name "*.rp.fq" | cut -d'/' -f2 | sed 's/\.rp\.fq//g' | parallel --env pd --env stf --env stF --env stq myrealign;
 
 
@@ -473,18 +491,6 @@ if [ ! -d "haplotypes" ]; then mkdir "haplotypes"; fi; #make a directory to hold
 echo "Processing mapped reads into hapblocks:";
 find . -name "*.2x.sam" | parallel --env pd mymakehapblocks;
 
-
-
-
-
-
-
-
-
-
-
-
-
 #Create a multi fasta file containing the paired read haplotypes
 if [ ! -d "alignments" ]; then mkdir "alignments"; fi; #make a directory to hold fasta sequences containing extracted haplotypes
 ams=$(find ./haplotypes -name "*.fa" | cut -d_ -f1-2 | sort -u | rev | cut -d'/' -f1 | rev);
@@ -494,14 +500,14 @@ echo "$ams" | parallel 'cat ./haplotypes/{}_*.fa > ./alignments/{}.mfa'; #concat
 #Remove duplicate sequences and identical subsequences
 if [[ "$dodedup" == YES ]];
 then echo "Removing duplicates:";
-else echo "Site"$'\t'"NumReads:NumIdenticalReads:NumIdenticalSubsequences" >> log.txt;
+  echo "Site"$'\t'"NumReads:NumIdenticalReads:NumIdenticalSubsequences" >> log.txt;
 fi;
 pd=$(pwd); export pd;
 (find "$pd"/alignments -name "*.mfa" | rev | cut -d'/' -f1 | rev | cut -d. -f1 | parallel --env pd --env dodedup mydedup) >> log.txt;
 
 
 
-#Produce a local alignment of the haplotypes to their reference using bwa, which might be viewed in something like IGV (Integrative Genomics Viewer).
+#Produce a pairwise local alignment of the haplotypes to their reference using bwa, which might be viewed in something like IGV (Integrative Genomics Viewer).
 #Also produce a multiple alignment of haplotypes to each other using muscle
 #final bwa-mem and muscle alignments in parallel
 find "$pd"/alignments -name "*.fa" | rev | cut -d'/' -f1 | rev | parallel --env pd myalignhaps;
