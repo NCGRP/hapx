@@ -138,18 +138,27 @@ export -f myreconfq;
 myrealign() {
             i="$1";
             h=$(echo "$i" | cut -d_ -f1); #just the contig name
-            bwa mem -p -M "$pd"/"$h"_ref.txt "$pd"/"$i".rp.fq > "$pd"/"$i".sam 2>/dev/null; #write out human readable sam file (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
-            samtools sort "$pd"/"$i.sam" -O BAM -o "$pd"/"$i".bam 2>/dev/null; #convert sam to bam
-            sambamba index -q "$pd"/"$i".bam "$pd"/"$i".bam.bai;
+            #ORIGbwa mem -p -M "$pd"/"$h"_ref.txt "$pd"/"$i".rp.fq > "$pd"/"$i".sam 2>/dev/null; #write out human readable sam file (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
+            #bwa mem -p -M "$pd"/"$h"_ref.txt "$pd"/"$i".rp.fq 2>/dev/null | samtools sort -O SAM -o "$pd"/"$i".sam 2>/dev/null; #write out human readable sam file (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
+            s=$(bwa mem -p -M "$pd"/"$h"_ref.txt "$pd"/"$i".rp.fq 2>/dev/null | samtools sort -O SAM 2>/dev/null); #capture human readable sam file in a variable, it's small since only involved 2 reads and a reference (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
+            #ORIGsamtools sort "$pd"/"$i.sam" -O BAM -o "$pd"/"$i".bam 2>/dev/null; #convert sam to bam
+            #ORIGsambamba index -q "$pd"/"$i".bam "$pd"/"$i".bam.bai;
         
-            #mapping quality changes upon realignment, extract only reads with new mapping quality > 60, excluding unmapped, convert those to proper fastq file and re-align again
-            samtools view -f "$stf" -F "$stF" -q "$stq" "$pd"/"$i".bam  2>/dev/null | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/' > "$pd"/"$i".2xrp.fq;
-            if [[ $(cat "$pd"/"$i".2xrp.fq) != "" ]]; #only re-realign if there are reads left after latest quality filter
-            then bwa mem -p -M "$pd"/"$h"_ref.txt "$pd"/"$i".2xrp.fq > "$pd"/"$i".2x.sam 2>/dev/null; #perform second realignment
+            #mapping quality changes upon realignment, extract only reads with user defined properties (samtools view -fFq), convert those to proper fastq file and re-align again
+            #ORIGsamtools view -f "$stf" -F "$stF" -q "$stq" "$pd"/"$i".bam  2>/dev/null | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/' > "$pd"/"$i".2xrp.fq;
+            #samtools view -f "$stf" -F "$stF" -q "$stq" <(echo "$s")  2>/dev/null | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/' > "$pd"/"$i".2xrp.fq;
+            #if [[ $(cat "$pd"/"$i".2xrp.fq) != "" ]]; #only re-realign if there are reads left after latest quality filter
+            #then bwa mem -p -M "$pd"/"$h"_ref.txt "$pd"/"$i".2xrp.fq > "$pd"/"$i".2x.sam 2>/dev/null; #perform second realignment
+            #fi;
+
+            t=$(samtools view -f "$stf" -F "$stF" -q "$stq" <(echo "$s")  2>/dev/null | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
+            if [[ $(echo "$t") != "" ]]; #only re-realign if there are reads left after latest quality filter
+            then bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$t") > "$pd"/"$i".2x.sam 2>/dev/null; #perform second realignment
             fi;
-            
+           
             #clean up
-            rm "$pd"/"$i".sam "$pd"/"$i".bam "$pd"/"$i".bam.bai "$pd"/"$i".2xrp.fq "$pd"/"$i".rp.fq; #clean up
+            #rm "$pd"/"$i".sam "$pd"/"$i".bam "$pd"/"$i".bam.bai "$pd"/"$i".2xrp.fq "$pd"/"$i".rp.fq; #clean up
+            rm "$pd"/"$i".rp.fq; #clean up
 }
 export -f myrealign;
 
