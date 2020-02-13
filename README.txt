@@ -68,6 +68,7 @@ grep ^# log.txt | tr '-' '_' > numblocks.txt;
 a=$(cut -d_ -f3 numblocks.txt | cut -d. -f1 | sort -n -u); #determine set of possible sites
 b=$(cut -d. -f2 numblocks.txt | cut -d$'\t' -f1 | sort -u); export b; #determine set of possible read groups
 
+for i in $b; do echo "position $i"hblox > $i.txt; done; #initialize output file with a header
 echo "$a" | parallel --bar --keep-order --env myq --env b myq;
 
 #sort and tab delimit output
@@ -82,6 +83,3 @@ for i in $b;
   
 
 
-
-
-grep "_$i\\.$b"$'\t' numblocks.txt
