@@ -47,3 +47,41 @@ Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.f
 <(for i in $(seq 1 1 305); do echo jcf7180008587925:"$i"-$(( $i + 1 )); done;)
 <(for i in $(seq 1 25 544); do echo jcf7180008531951:"$i"-$(( $i + 25 )); done;)
 <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
+
+
+
+
+#some postprocessing
+#postprocess haploblock counts in log.txt into something plottable
+myq() {
+      i=$1; #a position on the reference is incoming
+      for j in $b;
+      do a=$(grep _"$i"\\."$j" numblocks.txt | cut -d: -f4); #number of haploblock read pairs mapped to position i
+        if [[ "$a" == "" ]]; then a=0; fi; #if no data at position i set number of haploblock read pairs to 0
+        echo "$i $a" >> "$j".txt; #echo to output file specific for the readgroup
+      done;
+      
+}
+export -f myq;
+
+grep ^# log.txt | tr '-' '_' > numblocks.txt;
+a=$(cut -d_ -f3 numblocks.txt | cut -d. -f1 | sort -n -u); #determine set of possible sites
+b=$(cut -d. -f2 numblocks.txt | cut -d$'\t' -f1 | sort -u); export b; #determine set of possible read groups
+
+echo "$a" | parallel --bar --keep-order --env myq --env b myq;
+
+#sort and tab delimit output
+for i in $b;
+  do sort -t' ' -k1,1n "$i".txt | tr ' ' '\t' > "$i".2.txt;
+  done;
+#swap back to original filename
+for i in $b; 
+  do mv "$i".2.txt "$i".txt;
+  done;
+  
+  
+
+
+
+
+grep "_$i\\.$b"$'\t' numblocks.txt

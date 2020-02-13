@@ -713,7 +713,7 @@ then echo -n "and removing ";
 fi;
 echo "duplicates:";);
 
-echo "Site.Readgroup"$'\t'"NumReadsStart:NumIdenticalReads:NumIdenticalSubsequences:NumReadsFinal" >> log.txt;
+echo "Site.Readgroup"$'\t'"NumHblocksStart:NumIdenticalReads:NumIdenticalSubsequences:NumHblocksFinal" >> log.txt;
 (find "$pd"/alignments -name "*.mfa" | rev | cut -d'/' -f1 | rev | cut -d. -f1 | parallel --bar --sshloginfile /home/reevesp/machines --env pd --env dodedup --env mydedup mydedup) >> log.txt;
 
 
