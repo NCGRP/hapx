@@ -121,10 +121,11 @@ mycon1() {
        #myreconfq reconstructs a single fastq file that contains exclusively both reads of a read pair from a sam file
        i="$1"; #input is a description of sites to process in contigname_range format like jcf7180008531951_276-301
                #the sites are accessed from the file "$pd"/"$i".tmp below
+       h=$(echo "$i" | cut -d'_' -f1); #just the contig name
  
-       s=$(awk -F$'\t' -v rgf=$rgf '{print "@"$1"_"$rgf,$10,"+",$11}' "$pd"/"$i".tmp | sed '/^$/d' | tr " " "\n");
+       s=$(awk -F$'\t' -v rgf=$rgf '{print "@"$1"_"$rgf,$10,"+",$11}' "$pd"/"$i".tmp | tr " " "\n" | sed '/^$/d');
        
-       m=$(grep ^'@' <(echo "$s") | cut -d: -f1-9 | sort -u); #capture list of unique read pair names (includes also unpaired reads with unique names) that maps to contig_site $i 
+       m=$(grep ^'@' <(echo "$s") | cut -d: -f1-9 | sort -u | sed '/^$/d'); #capture list of unique read pair names (includes also unpaired reads with unique names) that map to contig_site $i 
 
        mfa=""; #initialize variable to contain all the read pair haplotypes
        for j in $m;
@@ -138,17 +139,23 @@ mycon1() {
 
 
            #myrealign takes the reads extracted from the primary alignment ($rpfq) and realigns them independently to the contig as reference
-           h=$(echo "$i" | cut -d'_' -f1); #just the contig name
            sbm=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$rpfq") 2>/dev/null | /share/apps/samtools sort -O SAM 2>/dev/null); #capture human readable sam file in a variable, it's small since only involved 2 reads and a reference (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
  
            #mapping quality changes upon realignment, extract only reads with user defined properties (/share/apps/samtools view -fFq), convert those to proper fastq file and re-align again
            t=$(/share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" <(echo "$sbm")  2>/dev/null | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
+           
            if [[ $(echo "$t") != "" ]]; #only re-realign if there are reads left after latest quality filter
-           then x2xsam=$(/share/apps/bwa mem  -p -M "$pd"/"$h"_ref.txt <(echo "$t") 2>/dev/null); #perform second realignment
-           else continue; #no reads left, continue to next
+           then x2xsam=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$t") 2>/dev/null | awk -F$'\t' '$3!="*"{print $0}'); #perform second realignment and manually remove any unmapped reads that may have been found
+           else continue; #no reads left to align, continue to next
            fi;
  
+           #test whether re-realignment still contains reads after removing unmapped reads, if not skip to next read pair
+           lnsam=$(echo "$x2xsam" | wc -l);
+           if [[ "$lnsam" < 3 ]]; then continue; fi; 
   
+
+
+
 
            #mymakehapblocks() processes read pairs into a single contiguous sequence, adds NNNs where opposing read pairs do not overlap to pad relative to the reference, adds IUPAC redundancy codes for conflicts between pairs of a read, removes deletion coding, retains insertions
            rp=$(echo "$x2xsam" | awk -F$'\t' -v h=$h '$3==h{print $1}' | sort -u | tr ":" "_"); #extract the unique read name from the sam formatted data that contains a single mapped read pair
@@ -623,7 +630,7 @@ echo "$g" | cut -d: -f1 | sort -u | parallel --bar 'bwa index {}_ref.txt 2>/dev/
 #this step aligns, then verifies mapping quality since it changes from the original values, then realigns
 #and
 #Process alignments of paired reads via mpileup into a single padded consensus sequence representing the haplotype
-if [ ! -d "haplotypes" ]; then mkdir "haplotypes"; fi; #make a directory to hold fasta sequences containing extracted haplotypes
+#if [ ! -d "haplotypes" ]; then mkdir "haplotypes"; fi; #make a directory to hold fasta sequences containing extracted haplotypes
 if [ ! -d "alignments" ]; then mkdir "alignments"; fi; #make a directory to hold alignments
 echo "Verifying mapping quality:";
 echo "$g" | cut -d' ' -f1 | tr ':' '_' | parallel --bar --sshloginfile /home/reevesp/machines --env pd --env rgf --env mycon1 --env myiupac --env myinsertion --env myconseq mycon1;
