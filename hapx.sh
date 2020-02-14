@@ -161,8 +161,6 @@ mycon1() {
            rp=$(echo "$x2xsam" | awk -F$'\t' -v h=$h '$3==h{print $1}' | sort -u | tr ":" "_"); #extract the unique read name from the sam formatted data that contains a single mapped read pair
            rname="$i"_"$rp"; #get a root name for the read pair/contig alignment
            
-           #samin="$pd"/"$i".2x.sam; #pseudo file name used to generate a root name
-           #rname=$(echo "$samin" | rev | cut -d'/' -f1 | rev | sed 's/\.2x.sam//g'); #get a root name for the read pair/contig alignment
            mp=$(/share/apps/samtools mpileup -A <(echo "$x2xsam") 2>/dev/null); #form the pileup file, use -A to include orphan reads. samtools mpileup by default excludes improper pairs. in hapx, bwa mem will find no proper pairs because too few reads are used during alignment
            
            #Extract the pos and base columns, remove read start ^., read end $, remove deletion indicators (e.g. -2AC, they are followed with *), pass to myinsertion subroutine to control insertions, then to myiupac to recode conflicts as ambiguous and produce the consensus sequence
@@ -193,39 +191,14 @@ mycon1() {
            #base3 contains the processed haplotype as a fasta file, deletions relative to reference removed.
            #base3 is as close as we can come to reconstructing the native molecule
            base3=$(echo ">$nrname";echo "$base2" | cut -d' ' -f2 | grep -v '-' | tr "\n" " " | sed 's/ //g');
-          
-           
-           
-           #echo "i = $i; rgf = $rgf; ctg = $ctg; rp = $rp";
-           #echo "$s" | head -4;
-           
-           
-           
-           #echo "$base3" > "$pd"/haplotypes/"$rname".fa;
-           #echo "$base3" >> "$pd"/alignments/"$i".mfa;
+
            mfa+="$base3"$'\n';
            
          done; # for j in $m
          
        #write out the mfa file
-       echo "$mfa" | sed '/^$/d' > "$pd"/alignments/"$i".mfa; #write the read pair haplotypes to a file that will be used for alignments
-
- 
- 
- 
- 
- 
- 
- 
-         #Create a multi fasta file containing the paired read haplotypes
-         #ams=$(find "$pd"/haplotypes -name "$i_*.fa" | cut -d_ -f1-2 | sort -u | rev | cut -d'/' -f1 | rev);
-         #echo "$ams" | parallel --bar 'cat ./haplotypes/{}_*.fa > ./alignments/{}.mfa'; #concatenate all fasta haplotypes belonging to a single contig:range
-         #cat "$pd"/haplotypes/"$i"_*.fa > "$pd"/alignments/"$i".mfa;
-         
-         #clean up read pair haplotypes corresponding to the current contig:range
-         #find "$pd"/haplotypes -name "$i_*.fa" -print0 | xargs -0 rm;
-         #rm "$pd"/haplotypes/"$i"_*.fa;
-         
+       mfa=$(echo "$mfa" | sed '/^$/d'); #remove terminal line break
+       echo "$mfa" > "$pd"/alignments/"$i".mfa; #write the read pair haplotypes to a file that will be used for alignments
 
 
 
@@ -434,7 +407,7 @@ myalignhaps() {
               #echo "Final mapping with bwa: $i";
               /share/apps/bwa mem  -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" 2>/dev/null | /share/apps/samtools sort -O BAM --threads "$thr" -o "$pd"/alignments/"$ss"_aligned_haps.bam0 2>/dev/null;
               /share/apps/samtools view -F 2048 -O BAM "$pd"/alignments/"$ss"_aligned_haps.bam0 -o "$pd"/alignments/"$ss"_aligned_haps.bam 2>/dev/null; #remove secondary/supplementary alignments (-F 2048)
-              /share/apps/sambamba index -q "$pd"/alignments/"$ss"_aligned_haps.bam "$pd"/alignments/"$ss"_aligned_haps.bam.bai;
+              /share/apps/sambamba index "$pd"/alignments/"$ss"_aligned_haps.bam "$pd"/alignments/"$ss"_aligned_haps.bam.bai;
               rm "$pd"/alignments/"$ss"_aligned_haps.bam0;
               
               #perform final multiple alignment with muscle, include a fragment of the reference contig overlapping the haplotypes
@@ -724,7 +697,7 @@ echo "Site.Readgroup"$'\t'"NumHblocksStart:NumIdenticalReads:NumIdenticalSubsequ
 if [[ $doalign == "YES" ]];
 then
   echo "Final mapping and alignment:"
-  find "$pd"/alignments -name "*.global.fa" | rev | cut -d'/' -f1 | rev | parallel --bar --env pd myalignhaps;
+  find "$pd"/alignments -name "*.global.fa"  | rev | cut -d'/' -f1 | rev | parallel --bar --env pd myalignhaps;
 fi;
 
 #clean up
