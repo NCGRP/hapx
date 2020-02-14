@@ -8,12 +8,11 @@ In working folder:
 Requirements (in path):
 1) samtools (hapx calls samtools sort/view/mpileup)
 2) bwa (mem/index)
-3) sambamba (index)
 4) GNU parallel
 5) muscle
 
 Usage: hapx ref bam sites
-Usage: hapx -r ref -b bam -a alnr [-f inc] [-F exc] [-q qual] [-d -m] -s sites
+Usage: hapx -r ref -b bam -a alnr [-f inc] [-F exc] [-q qual] [-p maxp] [-d -m ] -s sites
 where,
 ref = path to reference genome sequence in multi-fasta format [required]
 bam = path to bam file of reads aligned to ref [required]
@@ -30,6 +29,7 @@ qual = Samtools view -q option (minimum mapping quality of included reads) [defa
 
 -d = delete duplicate sequences and subsequences
 -m = map (bwa mem) and align (muscle) extracted haploblocks
+-p maxp = allow no more than maxp Ns between read pairs. This prevents read pairs from being assembled into an NNN-padded haploblock when they are too far apart.  You may want to set -p maxp according to average library insert size [default 1000];
 
 Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta /share/space/reevesp/patellifolia/xtr/AllP.merged.bam bwamem jcf7180008454378:303-304,jcf7180008531951:103-495,jcf7180008395354:294-295,jcf7180008827236:1031-1032,jcf7180008378511:277-278,jcf7180008637475:7-8,jcf7180008587925:106-107,jcf7180008527965:177-178,jcf7180008578969:84-85,jcf7180008484650:470-471,jcf7180008856767:98710-98886;
 
@@ -80,6 +80,19 @@ for i in $b;
   do mv "$i".2.txt "$i".txt;
   done;
   
-  
 
+
+
+
+The below mfa files have too many NNNN's in them:
+-rw-rw-r-- 1 reevesp reevesp 5645067 Feb 13 17:50 alignments/jcf7180008856767_90501-90601.global.fa
+-rw-rw-r-- 1 reevesp reevesp 4120396 Feb 13 17:49 alignments/jcf7180008856767_5101-5201.global.fa
+-rw-rw-r-- 1 reevesp reevesp 2362363 Feb 13 17:21 alignments/jcf7180008856767_90701-90801.global.fa
+-rw-rw-r-- 1 reevesp reevesp 1784606 Feb 13 17:15 alignments/jcf7180008856767_90601-90701.global.fa
+-rw-rw-r-- 1 reevesp reevesp 1036601 Feb 13 17:10 alignments/jcf7180008856767_5001-5101.global.fa
+-rw-rw-r-- 1 reevesp reevesp  764680 Feb 13 17:06 alignments/jcf7180008856767_114401-114501.global.fa
+-rw-rw-r-- 1 reevesp reevesp  755040 Feb 13 17:04 alignments/jcf7180008856767_90401-90501.global.fa
+  
+To make a variable with a bunch of NNNNs:
+NNN=$(printf '%0.sN' $(seq 1 1000));
 

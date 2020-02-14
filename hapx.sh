@@ -196,8 +196,9 @@ mycon1() {
            
          done; # for j in $m
          
-       #write out the mfa file
-       mfa=$(echo "$mfa" | sed '/^$/d'); #remove terminal line break
+       #write out the mfa file, manually removing over padded sequences (too many NNNNs)
+
+       mfa=$(echo "$mfa" | sed '/^$/d' | grep -v -B1 "$NNN"); #remove terminal line break and over padded sequences
        echo "$mfa" > "$pd"/alignments/"$i".mfa; #write the read pair haplotypes to a file that will be used for alignments
 
 
@@ -554,6 +555,7 @@ export -f myalignhaps;
 stf=1; #samtools view -f option
 stF=3852; #samtools view -F option, see https://broadinstitute.github.io/picard/explain-flags.html
 stq=60; #samtools view -q option
+maxp=1000; #max number of NNNNs used as padding between proper read pairs, implicitly sets an upper limit on insert size
 dodedup=NO; #by default do not remove duplicate (sub)sequences
 doalign=NO; #by default do not produce final alignments of extracted haploblocks to their reference
 pd=$(pwd); export pd; #path to working directory
@@ -600,6 +602,11 @@ case $key in
     shift # past argument
     shift # past value
     ;;
+    -p)
+    maxp="$2"
+    shift # past argument
+    shift # past value
+    ;;
     -d)
     dodedup=YES
     shift # past argument
@@ -627,11 +634,13 @@ else echo "Unrecognized aligner: $alnr.  Quitting...";
   exit;
 fi;
 e=$(cat "$sites"); #format sites for proper parsing by samtools view
+NNN=$(printf '%0.sN' $(seq 1 $maxp)); #string of NNNs, $maxp long
 export dodedup;
 export stf;
 export stF; 
 export stq;
 export rgf;
+export NNN;
 
 #log
 date > log.txt;
@@ -710,7 +719,7 @@ echo "$g" | cut -d: -f1 | sort -u | parallel --bar 'bwa index {}_ref.txt 2>/dev/
 #if [ ! -d "haplotypes" ]; then mkdir "haplotypes"; fi; #make a directory to hold fasta sequences containing extracted haplotypes
 if [ ! -d "alignments" ]; then mkdir "alignments"; fi; #make a directory to hold alignments
 echo "Verifying mapping quality:";
-echo "$g" | cut -d' ' -f1 | tr ':' '_' | parallel --bar --sshloginfile /home/reevesp/machines --env pd --env rgf --env mycon1 --env myiupac --env myinsertion --env myconseq mycon1;
+echo "$g" | cut -d' ' -f1 | tr ':' '_' | parallel --bar --sshloginfile /home/reevesp/machines --env pd --env NNN --env rgf --env mycon1 --env myiupac --env myinsertion --env myconseq mycon1;
 
 
 
