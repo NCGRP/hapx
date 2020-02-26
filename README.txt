@@ -12,10 +12,11 @@ Requirements (in path):
 5) muscle
 
 Usage: hapx ref bam sites
-Usage: hapx -r ref -b bam -a alnr [-f inc] [-F exc] [-q qual] [-p maxp] [-d -m ] -s sites
+Usage: hapx -r ref -b bam -o out -a alnr [-f inc] [-F exc] [-q qual] [-p maxp] [-d -m ] -s sites
 where,
 ref = path to reference genome sequence in multi-fasta format [required]
 bam = path to bam file of reads aligned to ref [required]
+out = name of directory for output files
 sites = path to file containing genomic positions to use [required]
      Provide a line delimited list of the form:
          jcf7180008454378:303-304
@@ -40,9 +41,11 @@ Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.f
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -a -m gem --s sites.txt;
 
 #use a function to generate target sites (effectively a sliding window)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -a gem -m -s <(for i in $(seq 1 1 305); do echo jcf7180008587925:"$i"-$(( $i + 1 )); done;);
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -a gem -m -s <(for i in $(seq 1 25 544); do echo jcf7180008531951:"$i"-$(( $i + 25 )); done;)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -a gem -m -s <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 1305 -a gem -m -s <(for i in $(seq 1 1 305); do echo jcf7180008587925:"$i"-$(( $i + 1 )); done;);
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 25544 -a gem -m -s <(for i in $(seq 1 25 544); do echo jcf7180008531951:"$i"-$(( $i + 25 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500 -a gem -m -s <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500 -a gem -s <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o s1 -a gem -s sites1.txt;
 
 <(for i in $(seq 1 1 305); do echo jcf7180008587925:"$i"-$(( $i + 1 )); done;)
 <(for i in $(seq 1 25 544); do echo jcf7180008531951:"$i"-$(( $i + 25 )); done;)
