@@ -142,9 +142,7 @@ mycon1() {
        mfa=""; #initialize variable to contain all the read pair haplotypes
        #below j contains a readgroup-annotated read pair name like @E00558:144:HHGCMCCXY:4:2210:23074:34043_RG:Z:55, that aligns to the current contig:site range
        for j in $m;
-         do #echo "j=$j";
-           rpfq=$(grep -A3 "$j" <(echo "$s") | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/'); #save read pair into a variable containing a reconstructed fastq, labeled as a read pair for bwa
-           #grep -A3 "$j" <(echo "$s) | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/' > "$pd"/"$i"_"$fn".rp.fq; #save read pair into its own reconstructed fastq file, labeled as a read pair for bwa
+         do rpfq=$(grep -A3 "$j" <(echo "$s") | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/'); #save read pair into a variable containing a reconstructed fastq, labeled as a read pair for bwa
            #above, the first sed searches from 0 to the pattern then performs substitution 1 on the fastq defline, which causes the insertion of whitespace.  The second sed then searches the whole file and performs substitution 2 on the second fastq defline. \S means 'not whitespace'
            #above, create single files containing both reads of a read pair
 
@@ -155,7 +153,7 @@ mycon1() {
            sbm=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$rpfq") 2>/dev/null | /share/apps/samtools sort -O SAM 2>/dev/null); #capture human readable sam file in a variable, it's small since only involved 2 reads and a reference (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
  
            #mapping quality changes upon realignment, extract only reads with user defined properties (/share/apps/samtools view -fFq), convert those to proper fastq file and re-align again
-           t=$(/share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" <(echo "$sbm")  2>/dev/null | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
+           t=$(/share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" <(echo "$sbm") 2>/dev/null | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
            
            if [[ $(echo "$t") != "" ]]; #only re-realign if there are reads left after latest quality filter
            then x2xsam=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$t") 2>/dev/null | awk -F$'\t' '$3!="*"{print $0}'); #perform second realignment and manually remove any unmapped reads that may have been found
@@ -221,7 +219,7 @@ mycon1() {
 
 
 #clean up
-#rm "$pd"/"$i".tmp;
+rm "$pd"/"$i".tmp;
        
 
 
@@ -529,7 +527,7 @@ echo "Counting qualified read pairs:"
 f=$(echo "$e" | parallel --keep-order --bar mycountqualreadpairs);
 
 g=$(echo "$f" | awk -F' ' '$2+$3!=0 {print $0}'); #remove any contigs from consideration when there are 0 reads (no paired reads:$2, no unpaired reads:$3) that align to them (this could also be a variable that supports a cutoff)
-echo "$f" | awk -F' ' '$2+$3==0 {print $0}' | cut -d' ' -f1 | sed 's/$/.tmp/' | sed 's/:/_/' | sed 's:^:'$pd'/:' | xargs rm; #remove .tmp files from contigs with 0 reads
+echo "$f" | awk -F' ' '$2+$3==0 {print $0}' | cut -d' ' -f1 | sed 's/$/.tmp/' | sed 's/:/_/' | sed 's:^:'$pd'/:' | xargs rm 2>/dev/null; #remove .tmp files from contigs with 0 reads
 if [[ "$g" == "" ]];
 then echo "No sites with reads. Quitting...";
   return;
@@ -553,7 +551,7 @@ echo "$g" | cut -d: -f1 | sort -u | parallel --bar 'bwa index '"$pd/"'{}_ref.txt
 #if [ ! -d "haplotypes" ]; then mkdir "$pd"/"haplotypes"; fi; #make a directory to hold fasta sequences containing extracted haplotypes
 if [ ! -d "alignments" ]; then mkdir "$pd"/"alignments"; fi; #make a directory to hold alignments
 
-echo "Site.Readgroup"$'\t'"NumHblocksStart:NumIdenticalReads:NumIdenticalSubsequences:NumHblocksFinal" >> "$log";
+echo "Site.Readgroup"$'\t'"NumHblocks:NumIdenticalHblocks:NumIdenticalHblockSubsequences:NumUniqueHblocks" >> "$log";
 
 echo "Evaluating mapping quality:";
 mydd=$(echo "$g" | cut -d' ' -f1 | tr ':' '_' | parallel --bar --sshloginfile /home/reevesp/machines --env pd --env dodedup --env maxp --env rgf --env mycon1 --env myiupac --env myinsertion --env myconseq mycon1);
@@ -598,6 +596,6 @@ then
 fi;
 
 #clean up
-#rm *_ref.txt*;
+rm "$pd"/*_ref.txt*;
 
   

@@ -28,7 +28,7 @@ inc = integer flag value for Samtools view -f option (properties of reads to inc
 exc = integer flag value for Samtools view -F option (properties of reads to exclude) [default=3852, exclude unmapped reads && reads whose mate or pair is unmapped && not primary alignment && read fails platform/vendor quality checks && read is PCR or optical duplicate && supplementary alignment]
 qual = Samtools view -q option (minimum mapping quality of included reads) [default=60]
 
--d = delete duplicate sequences and subsequences
+-d = delete duplicate sequences and subsequences from output
 -m = map (bwa mem) and align (muscle) extracted haploblocks
 -p maxp = allow no more than maxp Ns between read pairs. This prevents read pairs from being assembled into an NNN-padded haploblock when they are too far apart.  You may want to set -p maxp according to average library insert size [default 1000];
 
@@ -44,7 +44,10 @@ Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.f
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 1305 -a gem -m -s <(for i in $(seq 1 1 305); do echo jcf7180008587925:"$i"-$(( $i + 1 )); done;);
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 25544 -a gem -m -s <(for i in $(seq 1 25 544); do echo jcf7180008531951:"$i"-$(( $i + 25 )); done;)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500 -a gem -m -s <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500 -a gem -s <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500d -a gem -d -s <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500dm -a gem -d -m -s <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500step1 -a gem -d -s <(for i in $(seq 10000 1 15750); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_50kb -a gem -d -s <(for i in $(seq 73000 1 123000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o s1 -a gem -s sites1.txt;
 
 <(for i in $(seq 1 1 305); do echo jcf7180008587925:"$i"-$(( $i + 1 )); done;)
@@ -83,19 +86,4 @@ for i in $b;
   do mv "$i".2.txt "$i".txt;
   done;
   
-
-
-
-
-The below mfa files have too many NNNN's in them:
--rw-rw-r-- 1 reevesp reevesp 5645067 Feb 13 17:50 alignments/jcf7180008856767_90501-90601.global.fa
--rw-rw-r-- 1 reevesp reevesp 4120396 Feb 13 17:49 alignments/jcf7180008856767_5101-5201.global.fa
--rw-rw-r-- 1 reevesp reevesp 2362363 Feb 13 17:21 alignments/jcf7180008856767_90701-90801.global.fa
--rw-rw-r-- 1 reevesp reevesp 1784606 Feb 13 17:15 alignments/jcf7180008856767_90601-90701.global.fa
--rw-rw-r-- 1 reevesp reevesp 1036601 Feb 13 17:10 alignments/jcf7180008856767_5001-5101.global.fa
--rw-rw-r-- 1 reevesp reevesp  764680 Feb 13 17:06 alignments/jcf7180008856767_114401-114501.global.fa
--rw-rw-r-- 1 reevesp reevesp  755040 Feb 13 17:04 alignments/jcf7180008856767_90401-90501.global.fa
-  
-To make a variable with a bunch of NNNNs:
-NNN=$(printf '%0.sN' $(seq 1 1000));
 
