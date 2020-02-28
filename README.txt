@@ -38,7 +38,7 @@ Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.f
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -a gem -d -s jcf7180008454378:303-304,jcf7180008531951:103-495,jcf7180008856767:98710-98886;
 
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -a gem -d -s jcf7180008454378:204-304,jcf7180008531951:395-495,jcf7180008395354:195-295,jcf7180008827236:932-1032,jcf7180008378511:178-278,jcf7180008637475:7-107,jcf7180008587925:7-107,jcf7180008527965:78-178,jcf7180008578969:84-184,jcf7180008484650:371-471,jcf7180008856767:98710-98810;
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -a -m gem --s sites.txt;
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o ss -a gem -d -m -s sites.txt;
 
 #use a function to generate target sites (effectively a sliding window)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 1305 -a gem -m -s <(for i in $(seq 1 1 305); do echo jcf7180008587925:"$i"-$(( $i + 1 )); done;);
@@ -47,7 +47,12 @@ Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.f
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500d -a gem -d -s <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500dm -a gem -d -m -s <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500step1 -a gem -d -s <(for i in $(seq 10000 1 15750); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
+
+#takes about 4 hrs for 50kb (for 1GB then, 9132 years on 232 cores)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_50kb -a gem -d -s <(for i in $(seq 73000 1 123000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_MADS2 -a gem -d -m -s <(for i in $(seq 97315 1 97414); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_MADS3 -a gem -d -s <(for i in $(seq 97315 1 97414); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
+
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o s1 -a gem -s sites1.txt;
 
 <(for i in $(seq 1 1 305); do echo jcf7180008587925:"$i"-$(( $i + 1 )); done;)
@@ -62,11 +67,13 @@ Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.f
 myq() {
       i=$1; #a position on the reference is incoming
       for j in $b;
-      do a=$(grep _"$i"\\."$j" numblocks.txt | cut -d: -f4); #number of haploblock read pairs mapped to position i
+      do a=$(grep _"$i"\\."$j" numblocks.txt | cut -d: -f4); #number of unique haploblock read pairs mapped to position i
         if [[ "$a" == "" ]]; then a=0; fi; #if no data at position i set number of haploblock read pairs to 0
         echo "$i $a" >> "$j".txt; #echo to output file specific for the readgroup
+        b=$(grep _"$i"\\."$j" numblocks.txt | cut -d$'\t' -f2 | cut -d: -f1); #total number haploblock read pairs mapped to position i
+        if [[ "$b" == "" ]]; then b=0; fi; #if no data at position i set to 0
+        echo "$i $b" >> "$j".total.txt; #echo to output file specific for the readgroup
       done;
-      
 }
 export -f myq;
 
@@ -74,16 +81,23 @@ grep ^# log.txt | tr '-' '_' > numblocks.txt;
 a=$(cut -d_ -f3 numblocks.txt | cut -d. -f1 | sort -n -u); #determine set of possible sites
 b=$(cut -d. -f2 numblocks.txt | cut -d$'\t' -f1 | sort -u); export b; #determine set of possible read groups
 
-for i in $b; do echo "position $i"hblox > $i.txt; done; #initialize output file with a header
+for i in $b;
+  do echo "position $i"hblox > $i.txt;
+  echo "position $i"totalhblox > $i.total.txt;
+  done; #initialize output file with a header
 echo "$a" | parallel --bar --keep-order --env myq --env b myq;
 
 #sort and tab delimit output
 for i in $b;
   do sort -t' ' -k1,1n "$i".txt | tr ' ' '\t' > "$i".2.txt;
+    sort -t' ' -k1,1n "$i".total.txt | tr ' ' '\t' > "$i".2.total.txt;
   done;
 #swap back to original filename
 for i in $b; 
   do mv "$i".2.txt "$i".txt;
+    mv "$i".2.total.txt "$i".total.txt;
   done;
   
+#consolidate files into 1
+paste -d$'\t' global.txt RG_Z_5[0-5].txt global.total.txt RG_Z_*.total.txt | cut -d$'\t' -f1,2,4,6,8,10,12,14,16,18,20,22,24,26,28 > summary.txt;
 
