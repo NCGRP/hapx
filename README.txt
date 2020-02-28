@@ -12,7 +12,7 @@ Requirements (in path):
 5) muscle
 
 Usage: hapx ref bam sites
-Usage: hapx -r ref -b bam -o out -a alnr [-f inc] [-F exc] [-q qual] [-p maxp] [-d -m ] -s sites
+Usage: hapx -r ref -b bam -o out -a alnr [-f inc] [-F exc] [-q qual] [-p maxp] [-d -m -x] -s sites
 where,
 ref = path to reference genome sequence in multi-fasta format [required]
 bam = path to bam file of reads aligned to ref [required]
@@ -27,10 +27,11 @@ alnr = aligner used to create bam file, options: gem bwamem
 inc = integer flag value for Samtools view -f option (properties of reads to include), see https://broadinstitute.github.io/picard/explain-flags.html [default=1, include paired reads. Avoid including proper pairs, bwa mem requires many reads to calculate a distribution from which "proper pairs" are determined. In hapx, individual read pairs are aligned to their contig, thus no such distribution can be calculated and bwa mem will not return any proper pairs]
 exc = integer flag value for Samtools view -F option (properties of reads to exclude) [default=3852, exclude unmapped reads && reads whose mate or pair is unmapped && not primary alignment && read fails platform/vendor quality checks && read is PCR or optical duplicate && supplementary alignment]
 qual = Samtools view -q option (minimum mapping quality of included reads) [default=60]
+maxp = allow no more than maxp Ns between read pairs. This prevents read pairs from being assembled into an NNN-padded haploblock when they are too far apart.  You may want to set -p maxp according to average library insert size [default 1000];
 
 -d = delete duplicate sequences and subsequences from output
 -m = map (bwa mem) and align (muscle) extracted haploblocks
--p maxp = allow no more than maxp Ns between read pairs. This prevents read pairs from being assembled into an NNN-padded haploblock when they are too far apart.  You may want to set -p maxp according to average library insert size [default 1000];
+-x = do not write any output files except log (suppresses -d and -m)
 
 Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta /share/space/reevesp/patellifolia/xtr/AllP.merged.bam bwamem jcf7180008454378:303-304,jcf7180008531951:103-495,jcf7180008395354:294-295,jcf7180008827236:1031-1032,jcf7180008378511:277-278,jcf7180008637475:7-8,jcf7180008587925:106-107,jcf7180008527965:177-178,jcf7180008578969:84-85,jcf7180008484650:470-471,jcf7180008856767:98710-98886;
 
@@ -49,9 +50,11 @@ Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.f
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500step1 -a gem -d -s <(for i in $(seq 10000 1 15750); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
 
 #takes about 4 hrs for 50kb (for 1GB then, 9132 years on 232 cores)
+#now takes about 1.5 hrs for 50kb (for 1GB then, 3424 years on 232 cores)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_50kb -a gem -d -s <(for i in $(seq 73000 1 123000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_MADS2 -a gem -d -m -s <(for i in $(seq 97315 1 97414); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_MADS3 -a gem -d -s <(for i in $(seq 97315 1 97414); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_50kb2 -a gem -d -s <(for i in $(seq 73000 1 123000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_MADS2 -a gem -d -m -s <(for i in $(seq 97315 1 97494); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_MADS3 -a gem -x -s <(for i in $(seq 97315 1 97494); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
 
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o s1 -a gem -s sites1.txt;
 
