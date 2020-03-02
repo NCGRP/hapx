@@ -54,7 +54,7 @@ Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.f
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_50kb -a gem -d -s <(for i in $(seq 73000 1 123000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_50kb2 -a gem -d -s <(for i in $(seq 73000 1 123000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_MADS2 -a gem -d -m -s <(for i in $(seq 97315 1 97494); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_MADS3 -a gem -x -s <(for i in $(seq 97315 1 97494); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_MADS -a gem -d -x -s <(for i in $(seq 97315 1 97494); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
 
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o s1 -a gem -s sites1.txt;
 
