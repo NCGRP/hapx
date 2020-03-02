@@ -491,17 +491,47 @@ fi;
 echo "Site.Readgroup"$'\t'"NumHblocks:NumIdenticalHblocks:NumIdenticalHblockSubsequences:NumUniqueHblocks" >> "$log";
 
 echo "Reconstructing haploblocks:";
-#mydd=$(echo "$e" | parallel --bar --sshloginfile /home/reevesp/machines \
+
+#(echo "$e" | parallel --bar --sshloginfile /home/reevesp/machines \
 #       --env pd --env dodedup --env nooutput --env maxp --env rgf --env stf --env stF --env stq --env bam \
 #       --env mycon1 --env myiupac --env myinsertion --env myconseq --env mycountqualreadpairs \
-#       mycon1);
-#
-#echo "$mydd" >> "$log";
+#       mycon1) >> "$log";
 
-(echo "$e" | parallel --bar --sshloginfile /home/reevesp/machines \
+
+
+
+#souped up double-parallel statment to oversubscribe processors and get CPU usage up to 100%
+machfile="/home/reevesp/machines";
+nnode=$(wc -l "$machfile" | cut -d' ' -f1);
+numloc=$(echo "$e" | wc -l);
+gnuN=$(echo "$numloc / $nnode" | bc); 
+(echo "$e" | parallel --bar --jobs 1 --sshloginfile "$machfile" \
        --env pd --env dodedup --env nooutput --env maxp --env rgf --env stf --env stF --env stq --env bam \
        --env mycon1 --env myiupac --env myinsertion --env myconseq --env mycountqualreadpairs \
-       mycon1) >> "$log";
+       --pipe -N"$gnuN" \
+       /home/reevesp/bin/parallel --jobs 96 \
+       --env pd --env dodedup --env nooutput --env maxp --env rgf --env stf --env stF --env stq --env bam \
+       --env mycon1 --env myiupac --env myinsertion --env myconseq --env mycountqualreadpairs \
+       mycon1
+       ) >> "$log";
+
+
+
+
+
+
+
+
+
+
+
+#echo "$uloc" | parallel --sshloginfile ~/machinesALLCPUSPEC --jobs 1 --env main --env mysd --env mx --env de --env e --env b --env p --pipe -N"$gnuN" /home/reevesp/bin/parallel -j96 --env main --env mysd --env mx --env de --env e --env b --env p main;
+
+
+
+
+
+
 
 
 
@@ -530,5 +560,6 @@ fi;
 
 #clean up
 rm "$pd"/*_ref.txt*;
+date >> "$log";
 
   
