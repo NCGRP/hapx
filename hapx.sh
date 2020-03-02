@@ -49,7 +49,7 @@ myinsertion() {
                     nl=$(echo "$m" | wc -l); #number of lines
                     l2=$(echo "$m" | head -2 | tail -1); #get line 2 input
                     l2inslen=$(echo "$l2" | tr -d -c 0-9); #deletes all non-numeric characters from line 2 to read the length of the insertion
-                    l2nchar=$(echo "$l2" | tr -d 0-9 | awk '{ print length }'); #number of chars in line 2, counts all nun numeric characters
+                    l2nchar=$(echo "$l2" | tr -d 0-9 | awk '{ print length }'); #number of chars in line 2, counts all non numeric characters
                     
                     if [[ $l1len == 1 ]]; #case where there in an insertion in the first read there is one character on line 1. here, you need to get character from first line plus last character of the second line, if present
                     then if [[ $nl == 2 ]];
@@ -138,7 +138,7 @@ mycon1() {
        else f=$(mycountqualreadpairs);
        fi;
        
-       g=$(echo "$f" | awk -F' ' '$2+$3!=0 {print $0}'); #remove contig from consideration when there are 0 reads (no paired reads:$2, no unpaired reads:$3) that align (this could also be a variable that supports a cutoff)
+       g=$(echo "$f" | awk -F' ' '$2+$3!=0 {print $0}'); #remove contig from consideration if there are 0 reads (no paired reads:$2, no unpaired reads:$3) that align (this could also be a variable that supports a cutoff)
        if [[ "$g" == "" ]]; then return;
        fi;
 
@@ -153,22 +153,41 @@ mycon1() {
        
        m=$(grep ^'@' <(echo "$s") | cut -d: -f1-9 | sort -u | sed '/^$/d'); #capture list of unique read pair names (includes also unpaired reads with unique names) that map to contig:site $i 
 
+       
+       
+       
+       
+       time(
+       
        mfa=""; #initialize variable to contain all the read pair haplotypes
        #below j contains a readgroup-annotated read pair name like @E00558:144:HHGCMCCXY:4:2210:23074:34043_RG:Z:55, that aligns to the current contig:site range
        for j in $m;
-         do rpfq=$(grep -A3 "$j" <(echo "$s") | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/'); #save read pair into a variable containing a reconstructed fastq, labeled as a read pair for bwa
+         do 
+         
+time(         
+           rpfq=$(grep -A3 "$j" <(echo "$s") | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/'); #save read pair into a variable containing a reconstructed fastq, labeled as a read pair for bwa
            #above, the first sed searches from 0 to the pattern then performs substitution 1 on the fastq defline, which causes the insertion of whitespace.  The second sed then searches the whole file and performs substitution 2 on the second fastq defline. \S means 'not whitespace'
            #above, create single files containing both reads of a read pair
+) 2>>0.txt;
 
 
-
-
+time(
+           #one pipe. faster than two pipes
            #myrealign takes the reads extracted from the primary alignment ($rpfq) and realigns them independently to the contig as reference
-           sbm=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$rpfq") 2>/dev/null | /share/apps/samtools sort -O SAM 2>/dev/null); #capture human readable sam file in a variable, it's small since only involved 2 reads and a reference (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
- 
            #mapping quality changes upon realignment, extract only reads with user defined properties (/share/apps/samtools view -fFq), convert those to proper fastq file and re-align again
-           t=$(/share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" <(echo "$sbm") 2>/dev/null | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
-           
+           t=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$rpfq") 2>/dev/null | \
+               /share/apps/samtools sort -O SAM 2>/dev/null | \
+               /share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" 2>/dev/null | \
+               awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
+
+#           #myrealign takes the reads extracted from the primary alignment ($rpfq) and realigns them independently to the contig as reference
+#           sbm=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$rpfq") 2>/dev/null | /share/apps/samtools sort -O SAM 2>/dev/null); #capture human readable sam file in a variable, it's small since only involved 2 reads and a reference (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
+# 
+#           #mapping quality changes upon realignment, extract only reads with user defined properties (/share/apps/samtools view -fFq), convert those to proper fastq file and re-align again
+#           t=$(/share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" <(echo "$sbm") 2>/dev/null | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
+) 2>>1.txt;
+
+time(           
            if [[ $(echo "$t") != "" ]]; #only re-realign if there are reads left after latest quality filter
            then x2xsam=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$t") 2>/dev/null | awk -F$'\t' '$3!="*"{print $0}'); #perform second realignment and manually remove any unmapped reads that may have been found
            else continue; #no reads left to align, continue to next
@@ -177,20 +196,27 @@ mycon1() {
            #test whether re-realignment still contains reads after removing unmapped reads, if not skip to next read pair
            lnsam=$(echo "$x2xsam" | wc -l);
            if [[ "$lnsam" < 3 ]]; then continue; fi; 
-  
+) 2>>2.txt;  
 
 
 
-
+time(
            #mymakehapblocks() processes read pairs into a single contiguous sequence, adds NNNs where opposing read pairs do not overlap to pad relative to the reference, adds IUPAC redundancy codes for conflicts between pairs of a read, removes deletion coding, retains insertions
            rp=$(echo "$x2xsam" | awk -F$'\t' -v h=$h '$3==h{print $1}' | sort -u | tr ":" "_"); #extract the unique read name from the sam formatted data that contains a single mapped read pair
            rname=$(echo "$i" | tr ':' '_')"_$rp"; #get a root name for the read pair/contig alignment
-           
+) 2>>3.txt;
+
+
+time(           
            mp=$(/share/apps/samtools mpileup -A <(echo "$x2xsam") 2>/dev/null); #form the pileup file, use -A to include orphan reads. samtools mpileup by default excludes improper pairs. in hapx, bwa mem will find no proper pairs because too few reads are used during alignment
-           
+) 2>>4.txt;
+
+time(           
            #Extract the pos and base columns, remove read start ^., read end $, remove deletion indicators (e.g. -2AC, they are followed with *), pass to myinsertion subroutine to control insertions, then to myiupac to recode conflicts as ambiguous and produce the consensus sequence
            base1=$(echo "$mp" | cut -d$'\t' -f2,5 | sed 's/\^.//g' | sed 's/\$//g' | sed 's/-.*//g' | tr "\n" " " | myinsertion | myiupac); #haplotype extraction, unpadded as of now
-           
+) 2>>5.txt;
+
+time(           
            #Deal with contiguity and padding
            csq=$(myconseq "$(echo "$mp" | cut -d$'\t' -f2)" | grep -v "^1\-" | sed 's/-/ 1 /g'); #identify regions where reads are not aligned consecutively to the reference, exclude the range from 1-start of overlap, set up to use as an interval for seq command
            
@@ -225,13 +251,21 @@ mycon1() {
            base3=$(echo ">$nrname";echo "$base2" | cut -d' ' -f2 | grep -v '-' | tr "\n" " " | sed 's/ //g');
 
            mfa+="$base3"$'\n';
+) 2>>6.txt;
+
+
            
          done; # for j in $m
          
        #remove terminal line break in major output variable $mfa
        mfa=$(echo "$mfa" | sed '/^$/d');
 
+       ) 2>>jinm.txt;
 
+
+
+       
+       
 
 
        #mydedup() counts and optionally removes duplicate sequences and subsequences that are exactly contained within longer sequences, from the processed multi fasta file
@@ -281,16 +315,15 @@ echo "#""$inf"."$fon" $'\t'"$ts1":"$ni":"$ns":$(( $ts3/2 ));
 
 
        done; #for k in $rgs
+       
         
 
-       #remake the global output file, with nothing removed, if -d option not selected. Otherwise, when $dodedup == "YES", make the global output file with identical (sub)sequences removed
+       #remake the global output file, with nothing removed, if -d option not selected. Otherwise, when $dodedup == "YES" (-d switch on), make the global output file with identical (sub)sequences removed
        #only do any of this if the user has agreed to print output
-       if [[ "$nooutput" == "NO" ]];
-       then
-         if [[ "$dodedup" == "NO" ]]; 
-         then sed -e '/^>/s/$/@/' -e 's/^>/#/' <(echo "$mfa") | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}' | tr " " "\n" > "$pd"/alignments/"$inf".global.fa; 
-         else echo "$fonfa" > "$pd"/alignments/"$inf".global.fa;
-         fi;
+       if [[ "$nooutput" == "NO" ]] && [[ "$dodedup" == "NO" ]]; 
+       then sed -e '/^>/s/$/@/' -e 's/^>/#/' <(echo "$mfa") | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}' | tr " " "\n" > "$pd"/alignments/"$inf".global.fa; #produce undeduped output for alignment
+       elif [[ "$nooutput" == "NO" ]] && [[ "$dodedup" == "YES" ]]
+       then echo "$fonfa" > "$pd"/alignments/"$inf".global.fa; #produce deduped output for alignment
        fi;
       
 }
@@ -432,10 +465,9 @@ else echo "Unrecognized aligner: $alnr.  Quitting...";
   exit;
 fi;
 
-#suppress dodedup and doalign options if -x nooutput option is selected
-if [[ "nooutput" == "YES" ]];
-then dodedup=NO;
-  doalign=NO;
+#suppress doalign option if -x nooutput option is selected
+if [[ "$nooutput" == "YES" ]];
+then doalign=NO;
 fi;
 
 pd=$(pwd)"/$outfol"; export pd; #path to working directory
@@ -484,7 +516,7 @@ echo "$e" | cut -d: -f1 | sort -u | parallel --bar 'bwa index '"$pd/"'{}_ref.txt
 #this step aligns, then verifies mapping quality since it changes from the original values, then realigns
 #and
 #Process alignments of paired reads via mpileup into a single padded consensus sequence representing the haplotype
-if [[ "nooutput" == "NO" ]];
+if [[ "$nooutput" == "NO" ]];
 then
   if [ ! -d "$pd"/"alignments" ]; then mkdir "$pd"/"alignments"; fi; #make a directory to hold alignments if not already existing
 fi;
