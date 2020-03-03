@@ -157,21 +157,14 @@ mycon1() {
        
        
        
-       time(
        
        mfa=""; #initialize variable to contain all the read pair haplotypes
        #below j contains a readgroup-annotated read pair name like @E00558:144:HHGCMCCXY:4:2210:23074:34043_RG:Z:55, that aligns to the current contig:site range
        for j in $m;
-         do 
-         
-time(         
-           rpfq=$(grep -A3 "$j" <(echo "$s") | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/'); #save read pair into a variable containing a reconstructed fastq, labeled as a read pair for bwa
+         do rpfq=$(grep -A3 "$j" <(echo "$s") | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/'); #save read pair into a variable containing a reconstructed fastq, labeled as a read pair for bwa
            #above, the first sed searches from 0 to the pattern then performs substitution 1 on the fastq defline, which causes the insertion of whitespace.  The second sed then searches the whole file and performs substitution 2 on the second fastq defline. \S means 'not whitespace'
            #above, create single files containing both reads of a read pair
-) 2>>0.txt;
 
-
-time(
            #one pipe. faster than two pipes
            #myrealign takes the reads extracted from the primary alignment ($rpfq) and realigns them independently to the contig as reference
            #mapping quality changes upon realignment, extract only reads with user defined properties (/share/apps/samtools view -fFq), convert those to proper fastq file and re-align again
@@ -185,9 +178,7 @@ time(
 # 
 #           #mapping quality changes upon realignment, extract only reads with user defined properties (/share/apps/samtools view -fFq), convert those to proper fastq file and re-align again
 #           t=$(/share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" <(echo "$sbm") 2>/dev/null | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
-) 2>>1.txt;
 
-time(           
            if [[ $(echo "$t") != "" ]]; #only re-realign if there are reads left after latest quality filter
            then x2xsam=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$t") 2>/dev/null | awk -F$'\t' '$3!="*"{print $0}'); #perform second realignment and manually remove any unmapped reads that may have been found
            else continue; #no reads left to align, continue to next
@@ -196,27 +187,16 @@ time(
            #test whether re-realignment still contains reads after removing unmapped reads, if not skip to next read pair
            lnsam=$(echo "$x2xsam" | wc -l);
            if [[ "$lnsam" < 3 ]]; then continue; fi; 
-) 2>>2.txt;  
 
-
-
-time(
            #mymakehapblocks() processes read pairs into a single contiguous sequence, adds NNNs where opposing read pairs do not overlap to pad relative to the reference, adds IUPAC redundancy codes for conflicts between pairs of a read, removes deletion coding, retains insertions
            rp=$(echo "$x2xsam" | awk -F$'\t' -v h=$h '$3==h{print $1}' | sort -u | tr ":" "_"); #extract the unique read name from the sam formatted data that contains a single mapped read pair
            rname=$(echo "$i" | tr ':' '_')"_$rp"; #get a root name for the read pair/contig alignment
-) 2>>3.txt;
 
-
-time(           
            mp=$(/share/apps/samtools mpileup -A <(echo "$x2xsam") 2>/dev/null); #form the pileup file, use -A to include orphan reads. samtools mpileup by default excludes improper pairs. in hapx, bwa mem will find no proper pairs because too few reads are used during alignment
-) 2>>4.txt;
 
-time(           
            #Extract the pos and base columns, remove read start ^., read end $, remove deletion indicators (e.g. -2AC, they are followed with *), pass to myinsertion subroutine to control insertions, then to myiupac to recode conflicts as ambiguous and produce the consensus sequence
            base1=$(echo "$mp" | cut -d$'\t' -f2,5 | sed 's/\^.//g' | sed 's/\$//g' | sed 's/-.*//g' | tr "\n" " " | myinsertion | myiupac); #haplotype extraction, unpadded as of now
-) 2>>5.txt;
 
-time(           
            #Deal with contiguity and padding
            csq=$(myconseq "$(echo "$mp" | cut -d$'\t' -f2)" | grep -v "^1\-" | sed 's/-/ 1 /g'); #identify regions where reads are not aligned consecutively to the reference, exclude the range from 1-start of overlap, set up to use as an interval for seq command
            
@@ -251,7 +231,7 @@ time(
            base3=$(echo ">$nrname";echo "$base2" | cut -d' ' -f2 | grep -v '-' | tr "\n" " " | sed 's/ //g');
 
            mfa+="$base3"$'\n';
-) 2>>6.txt;
+
 
 
            
@@ -260,7 +240,7 @@ time(
        #remove terminal line break in major output variable $mfa
        mfa=$(echo "$mfa" | sed '/^$/d');
 
-       ) 2>>jinm.txt;
+
 
 
 
