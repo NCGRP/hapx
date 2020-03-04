@@ -277,7 +277,7 @@ mycon1() {
                /share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" 2>/dev/null | \
                awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
 
-#two pipes
+#two pipes version
 #           #myrealign takes the reads extracted from the primary alignment ($rpfq) and realigns them independently to the contig as reference
 #           sbm=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$rpfq") 2>/dev/null | /share/apps/samtools sort -O SAM 2>/dev/null); #capture human readable sam file in a variable, it's small since only involved 2 reads and a reference (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
 # 
@@ -336,16 +336,16 @@ mycon1() {
            base3=$(echo ">$nrname";echo "$base2" | cut -d' ' -f2 | grep -v '-' | tr "\n" " " | sed 's/ //g');
 
            mfa+="$base3"$'\n';
-
-
-
            
          done; # for j in $m
          
        #remove terminal line break in major output variable $mfa
-       mfa=$(echo "$mfa" | sed '/^$/d');
+       mfa=$(sed '/^$/d' <<< "$mfa");
        if [[ "$mfa" == "" ]]; then return; #skip out of this contig:site-range, there is no qualified data
        fi;
+
+
+
 
        #mydedup() counts and optionally removes duplicate sequences and subsequences that are exactly contained within longer sequences, from the processed multi fasta file
        inf=$(echo "$i" | tr ':' '_'); #value like jcf7180008587925_40-41
@@ -356,12 +356,14 @@ mycon1() {
        rgs=$(echo "$da" | cut -d'_' -f2-4 | sort -u | tr '\n' ' '); #acquire a list of readgroups
        rgs="$rgs>rp"; #add an item to the list of readgroups that will allow all sequences to be grepped from the file '>rp'
        
+       allhash=""; #initialize variable to hold hashes of dna sequences for allele frequency calculation
        for k in $rgs;
        do 
        
          fon=$(echo "$k" | sed 's/>rp/global/'); #file output name, #replace grep item '>rp' for retrieving all sequences with "global", "global" means all unique haplotypes are counted considering all readgroups simultaneously.
-         fonmfa=$(echo "$da" | grep "$k"); #make a readgroup specific mfa file. this has all haploblocks, including duplicated and subsequence
-         fonlmfa=$(echo "$da" | grep "$k" | awk -F' ' '!_[$2]++'); #make a readgroup specific, linearized lmfa file. this has end-to-end identical sequences removed via the clever awk clause 
+         fonmfa=$(echo "$da" | grep "$k" | sort); #make a readgroup specific mfa file. this has all haploblocks, including duplicated and subsequence
+         fonlmfa=$(echo "$fonmfa" | awk -F' ' '!_[$2]++' | sort); #make a readgroup specific, linearized lmfa file. this keeps only one of end-to-end identical sequences via the clever awk clause
+         e2eident=$(comm -2 -3 <(echo "$fonmfa") <(echo "$fonlmfa")); #collect sequences that were removed as end-to-end identical, these will be added back later to calculate allele frequencies
        
          #remove identical subsequences as a means of counting them
          rem="";
@@ -376,26 +378,55 @@ mycon1() {
          rem=$(echo "$rem" | sed '/^$/d'); #remove trailing blank line
        
          if [[ "$rem" == "" ]];
-         then fonfa=$(echo "$fonlmfa" | tr " " "\n"); #there are no identical subsequences so just copy to a final file name
+         then fonfa=$(echo "$fonlmfa" | sort); #there are no identical subsequences so just copy to a final file name
          else
-           fonfa=$(grep -v -F -f <(echo "$rem") <(echo "$fonlmfa") | tr " " "\n"); #remove all lines that contain sequences that are subsequences of other lines
+           fonfa=$(grep -v -F -f <(echo "$rem") <(echo "$fonlmfa") | sort); #remove all lines that contain sequences that are subsequences of other lines
          fi;
        
          #count identical sequences and subsequences removed
          ts1=$(echo "$fonmfa" | wc -l); #number of sequences at start
          ts2=$(echo "$fonlmfa" | wc -l); #number of sequences after removing identical
-         ts3=$(echo "$fonfa" | wc -l);  #number of sequence after removing identical and subsequences (2 lines per sequence)
+         ts3=$(echo "$fonfa" | wc -l);  #number of sequence after removing identical and subsequences
          ni=$(( $ts1 - $ts2 )); #number of identical sequences
-         ns=$(( $ts2 - ($ts3/2) )); #number of identical subsequences
+         ns=$(( $ts2 - ($ts3) )); #number of identical subsequences
 
 
 
 ###report counts to parallel statement for log.txt###
-echo "#""$inf"."$fon" $'\t'"$ts1":"$ni":"$ns":$(( $ts3/2 )); 
+echo "#""$inf"."$fon" $'\t'"$ts1":"$ni":"$ns":"$ts3"; 
 ###                                               ###
 
 
+
+       #Hash sequences from the current readgroup ($k), add to a variable with the readgroup ID.
+       #Set up to calculate allele frequencies.  You must add back the end to end identical sequences to $fonfa, but not the identical subsequences.
+       #then hash sequences from the current readgroup ($k), add to a variable with the readgroup ID.
+       
+       fonallelct=$(echo "$fonfa"$'\n'"$e2eident" | sort); #add back end to end identical sequences to unique sequences contained in $fonfa
+       hashrg=$(cut -d' ' -f2 <<<"$fonallelct" | python -c "exec(\"import hashlib, sys\nfor line in sys.stdin:\n\tprint hashlib.sha224(line).hexdigest()\")" | sed "s/^/$k /"); #hash dna sequences, label with readgroup
+       allhash+="$hashrg"$'\n'; #add to variable
+
        done; #for k in $rgs
+       
+       allhash=$(sed '/^$/d' <<< "$allhash"); #remove empty line at end
+
+       #at this point you have all unique sequences in $fonfa since the last member of $rgs is ">rp", which includes all sequences
+       #use this as the basis for searching through each of the readgroup sequence sets to calculate frequencies
+       uniqhash=$(cut -d' ' -f2 <<<"$fonfa" | python -c "exec(\"import hashlib, sys\nfor line in sys.stdin:\n\tprint hashlib.sha224(line).hexdigest()\")" ); #get hash for unique sequences
+
+       #calculate allele frequency for all unique alleles in each readgroup
+       for k in $rgs;
+       do summ=$(grep ^"$k " <<<"$allhash" | wc -l); #total number of alleles observed
+         for u in $uniqhash;
+           do nla=$(grep ^"$k $u"$ <<<"$allhash" | wc -l); #number of allele $u
+             nlf=$(bc <<<"scale=6;$nla/$summ"); #calculate within pop allele frequency
+             echo "$k $nla $nlf $u"; 
+          done;
+       done;
+
+###STARTING HERE, figure out how to report table of allele frequencies at this $site, probably you have a column for each allele (just give them an integer) and its frequency in each $site with valid data.
+###You are going to have to jigger around the echo statement above that reports data 
+
 
 
        #remake the global output file, with nothing removed, if -d option not selected. Otherwise, when $dodedup == "YES" (-d switch on), make the global output file with identical (sub)sequences removed
