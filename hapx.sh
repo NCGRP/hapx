@@ -13,8 +13,8 @@ export -f myconseq;
 #myiupac() replaces character strings with their iupac equivalent or proper insertion and deletion coding.
 myiupac() {
         read i; #input is a piped row of data
-        a=$(echo "$i" | tr " " "\n" | cut -d$'\t' -f1); #get the position numbering
-        b=$(echo "$i" | tr " " "\n" | cut -d$'\t' -f2 \
+        a=$(tr " " "\n" <<<"$i" | cut -d$'\t' -f1); #get the position numbering
+        b=$(tr " " "\n" <<<"$i" | cut -d$'\t' -f2 \
           | sed 's/^AA$/A/g' | sed 's/^CC$/C/g' | sed 's/^GG$/G/g' | sed 's/^TT$/T/g' \
           | sed 's/^AC$/M/g' | sed 's/^CA$/M/g' \
           | sed 's/^AG$/R/g' | sed 's/^GA$/R/g' \
@@ -28,64 +28,83 @@ myiupac() {
           | sed 's/^G\*$/G/g' | sed 's/^\*G$/G/g' \
           | sed 's/^T\*$/T/g' | sed 's/^\*T$/T/g');
           paste -d' ' <(echo "$a") <(echo "$b"); #recombine position numbers with consensus calls
+
+#orig
+#        read i; #input is a piped row of data
+#        a=$(echo "$i" | tr " " "\n" | cut -d$'\t' -f1); #get the position numbering
+#        b=$(echo "$i" | tr " " "\n" | cut -d$'\t' -f2 \
+#          | sed 's/^AA$/A/g' | sed 's/^CC$/C/g' | sed 's/^GG$/G/g' | sed 's/^TT$/T/g' \
+#          | sed 's/^AC$/M/g' | sed 's/^CA$/M/g' \
+#          | sed 's/^AG$/R/g' | sed 's/^GA$/R/g' \
+#          | sed 's/^AT$/W/g' | sed 's/^TA$/W/g' \
+#          | sed 's/^CG$/S/g' | sed 's/^GC$/S/g' \
+#          | sed 's/^CT$/Y/g' | sed 's/^TC$/Y/g' \
+#          | sed 's/^GT$/K/g' | sed 's/^TG$/K/g' \
+#          | sed 's/^\*$/x/g' | sed 's/^\**$/x/g' \
+#          | sed 's/^A\*$/A/g' | sed 's/^\*A$/A/g' \
+#          | sed 's/^C\*$/C/g' | sed 's/^\*C$/C/g' \
+#          | sed 's/^G\*$/G/g' | sed 's/^\*G$/G/g' \
+#          | sed 's/^T\*$/T/g' | sed 's/^\*T$/T/g');
+#          paste -d' ' <(echo "$a") <(echo "$b"); #recombine position numbers with consensus calls
 }
 export -f myiupac;
 
 #myinsertion() processes insertions coded in mpileup
 myinsertion() {
+#echo replaced with here-strings "<<<" for possible speed increase            
               read i;
-              i=$(echo "$i" | tr ' ' '\n'); #delimit with line breaks
-              j=$(echo "$i" | grep "+"); #collect all lines with insertions
-              ij=$(echo "$i" | grep -v "+"); #collect all lines without insertions
+              i=$(tr ' ' '\n' <<<"$i"); #delimit with line breaks
+              j=$(grep "+" <<<"$i"); #collect all lines with insertions
+              ij=$(grep -v "+" <<<"$i"); #collect all lines without insertions
 
               #process lines with insertions ("$j"), save in a variable $lwi
               if [[ "$j" == "" ]];
               then lwi=""; #there are no insertions so create a dummy, empty variable
               else
                 lwi=$(while read str;
-                  do pos=$(echo "$str" | cut -d$'\t' -f1); #get the starting position of the insertion
-                    m=$(echo "$str" | cut -d$'\t' -f2 | tr '+' '\n'); #break into lines on +
-                    l1len=$(echo "$m" | head -1 | awk '{print length}'); #length of line one
-                    nl=$(echo "$m" | wc -l); #number of lines
-                    l2=$(echo "$m" | head -2 | tail -1); #get line 2 input
-                    l2inslen=$(echo "$l2" | tr -d -c 0-9); #deletes all non-numeric characters from line 2 to read the length of the insertion
-                    l2nchar=$(echo "$l2" | tr -d 0-9 | awk '{ print length }'); #number of chars in line 2, counts all non numeric characters
+                  do pos=$(cut -d$'\t' -f1 <<<"$str"); #get the starting position of the insertion
+                    m=$(cut -d$'\t' -f2 <<<"$str" | tr '+' '\n'); #break into lines on +
+                    l1len=$(head -1 <<<"$m" | awk '{print length}'); #length of line one
+                    nl=$(wc -l <<<"$m"); #number of lines
+                    l2=$(head -2 <<<"$m" | tail -1); #get line 2 input
+                    l2inslen=$(tr -d -c 0-9 <<<"$l2"); #deletes all non-numeric characters from line 2 to read the length of the insertion
+                    l2nchar=$(tr -d 0-9 <<<"$l2" | awk '{ print length }'); #number of chars in line 2, counts all non numeric characters
                     
                     if [[ $l1len == 1 ]]; #case where there in an insertion in the first read there is one character on line 1. here, you need to get character from first line plus last character of the second line, if present
                     then if [[ $nl == 2 ]];
                          then if [[ $l2nchar == $l2inslen ]]; #test whether there is a base from the second read hanging off the end of the insertion in line 2
-                              then m=$(echo "$m" | sed '2s/$/\*/'); #add an asterisk to the end of the second line to act as the unknown read 2 base
+                              then m=$(sed '2s/$/\*/' <<<"$m"); #add an asterisk to the end of the second line to act as the unknown read 2 base
                               fi;
-                           l2=$(echo "$m" | head -2 | tail -1); #recalculate line 2 input now that it has been modified with an asterisk
+                           l2=$(head -2 <<<"$m" | tail -1); #recalculate line 2 input now that it has been modified with an asterisk
                            n=$(paste -d' ' <(echo "$m" | head -1) <(echo "$l2" | rev | cut -c1) | sed 's/ //'); #char states composed of line 1 + last character of line 2
                            for i in $(seq 1 1 $l2inslen);
-                             do n=$(echo "$n";echo "$l2" | tr -d 0-9 | cut -c$i)"*"; #combine character n of line 2 with an asterisk to form the read pair
+                             do n=$(echo "$n";tr -d 0-9 <<<"$l2" | cut -c$i)"*"; #combine character n of line 2 with an asterisk to form the read pair
                              done;
                           
                          elif [[ $nl == 3 ]]; #if there are three lines then there are inserts after both reads, which means that the last character of line 2 is always read 2 character 1
-                         then n=$(paste -d' ' <(echo "$m" | head -1) <(echo "$l2" | rev | cut -c1) | sed 's/ //'); #char states composed of line 1 + last character of line 2
-                           l3=$(echo "$m" | head -3 | tail -1); #get line 3 input
-                           l3inslen=$(echo "$l3" | tr -d -c 0-9); #deletes all non-numeric characters from line 3 to read the length of the insertion
+                         then n=$(paste -d' ' <(head -1 <<<"$m") <(rev <<<"$l2" | cut -c1) | sed 's/ //'); #char states composed of line 1 + last character of line 2
+                           l3=$(head -3 <<<"$m" | tail -1); #get line 3 input
+                           l3inslen=$(tr -d -c 0-9 <<<"$l3"); #deletes all non-numeric characters from line 3 to read the length of the insertion
                     
                            if [[ $l2inslen == $l3inslen ]]; #case where insertion lengths are the same
                            then for i in $(seq 1 1 $l2inslen);
-                             do n=$(echo "$n";(echo "$l2" | tr -d 0-9 | cut -c$i;echo "$l3" | tr -d 0-9 | cut -c$i) | tr -d '\n'); #combine character n of line 2 with character n of line 3 to form the read pair
+                             do n=$(echo "$n";(tr -d 0-9 <<<"$l2" | cut -c$i;tr -d 0-9 <<<"$l3" | cut -c$i) | tr -d '\n'); #combine character n of line 2 with character n of line 3 to form the read pair
                              done;
                            elif [[ $l2inslen < $l3inslen ]]; #case where read1 (l2) insertion length is less than read 2 (l3)
                            then for i in $(seq 1 1 $l2inslen);
-                             do n=$(echo "$n";(echo "$l2" | tr -d 0-9 | cut -c$i;echo "$l3" | tr -d 0-9 | cut -c$i) | tr -d '\n'); #combine character n of line 2 with character n of line 3 to form the read pair
+                             do n=$(echo "$n";(tr -d 0-9 <<<"$l2" | cut -c$i;tr -d 0-9 <<<"$l3" | cut -c$i) | tr -d '\n'); #combine character n of line 2 with character n of line 3 to form the read pair
                              done;
                              #now combine asterisk for line 2 (which is shorter) with character n of line 3 to form the read pair
                              for i in $(seq $(($l2inslen+1)) 1 $l3inslen);
-                               do n=$(echo "$n";echo -n "*";echo "$l3" | tr -d 0-9 | cut -c$i); 
+                               do n=$(echo "$n";echo -n "*";tr -d 0-9 <<<"$l3" | cut -c$i); 
                                done;
                            elif [[ $l2inslen > $l3inslen ]]; #case where read1 (l2) insertion length is greater than read 2 (l3)
                            then for i in $(seq 1 1 $l3inslen);
-                             do n=$(echo "$n";(echo "$l2" | tr -d 0-9 | cut -c$i;echo "$l3" | tr -d 0-9 | cut -c$i) | tr -d '\n'); #combine character n of line 2 with character n of line 3 to form the read pair
+                             do n=$(echo "$n";(tr -d 0-9 <<<"$l2" | cut -c$i;tr -d 0-9 <<<"$l3" | cut -c$i) | tr -d '\n'); #combine character n of line 2 with character n of line 3 to form the read pair
                              done;
                              #now combine character n of line 2 with asterisk for line 3 (which is shorter) to form the read pair
                              for i in $(seq $(($l3inslen+1)) 1 $l2inslen);
-                               do n=$(echo "$n";echo "$l2" | tr -d 0-9 | cut -c$i)"*"; 
+                               do n=$(echo "$n";tr -d 0-9 <<<"$l2" | cut -c$i)"*"; 
                                done;
                            fi;    
                          fi;
@@ -93,12 +112,12 @@ myinsertion() {
                     elif [[ $l1len == 2 ]];
                       then n=$(echo "$m" | head -1);
                         for i in $(seq 1 1 $l2inslen);
-                          do n=$(echo "$n";echo -n "*";echo "$l2" | tr -d 0-9 | cut -c$i); #place an asterisk for read 1 in combination with character n of line 2 for read 2
+                          do n=$(echo "$n";echo -n "*";tr -d 0-9 <<<"$l2" | cut -c$i); #place an asterisk for read 1 in combination with character n of line 2 for read 2
                           done;
                     else echo "ERROR: incompatible string: $m";
                     fi;
                     
-                    nls=$(( $(echo "$n" | wc -l) - 1 )); #count the number of lines in the processed insertion, decrement by one since first line will not get a decimal place
+                    nls=$(( $(wc -l <<<"$n") - 1 )); #count the number of lines in the processed insertion, decrement by one since first line will not get a decimal place
                     #calculate the line numbering scheme for the processed insertion, will be like: 474 474.1 474.2
                     lz=$(echo "$pos";
                       for k in $(seq 1 1 $nls);
@@ -113,6 +132,90 @@ myinsertion() {
               
               #combine lines with insertions with those without, sort, print out without line breaks to be sent to myiupac in a pipe
               echo "$ij"$'\n'"$lwi" | sort -t$'\t' -k1,1n | tr "\n" " ";
+
+
+#orig
+#              read i;
+#              i=$(echo "$i" | tr ' ' '\n'); #delimit with line breaks
+#              j=$(echo "$i" | grep "+"); #collect all lines with insertions
+#              ij=$(echo "$i" | grep -v "+"); #collect all lines without insertions
+#
+#              #process lines with insertions ("$j"), save in a variable $lwi
+#              if [[ "$j" == "" ]];
+#              then lwi=""; #there are no insertions so create a dummy, empty variable
+#              else
+#                lwi=$(while read str;
+#                  do pos=$(echo "$str" | cut -d$'\t' -f1); #get the starting position of the insertion
+#                    m=$(echo "$str" | cut -d$'\t' -f2 | tr '+' '\n'); #break into lines on +
+#                    l1len=$(echo "$m" | head -1 | awk '{print length}'); #length of line one
+#                    nl=$(echo "$m" | wc -l); #number of lines
+#                    l2=$(echo "$m" | head -2 | tail -1); #get line 2 input
+#                    l2inslen=$(echo "$l2" | tr -d -c 0-9); #deletes all non-numeric characters from line 2 to read the length of the insertion
+#                    l2nchar=$(echo "$l2" | tr -d 0-9 | awk '{ print length }'); #number of chars in line 2, counts all non numeric characters
+#                    
+#                    if [[ $l1len == 1 ]]; #case where there in an insertion in the first read there is one character on line 1. here, you need to get character from first line plus last character of the second line, if present
+#                    then if [[ $nl == 2 ]];
+#                         then if [[ $l2nchar == $l2inslen ]]; #test whether there is a base from the second read hanging off the end of the insertion in line 2
+#                              then m=$(echo "$m" | sed '2s/$/\*/'); #add an asterisk to the end of the second line to act as the unknown read 2 base
+#                              fi;
+#                           l2=$(echo "$m" | head -2 | tail -1); #recalculate line 2 input now that it has been modified with an asterisk
+#                           n=$(paste -d' ' <(echo "$m" | head -1) <(echo "$l2" | rev | cut -c1) | sed 's/ //'); #char states composed of line 1 + last character of line 2
+#                           for i in $(seq 1 1 $l2inslen);
+#                             do n=$(echo "$n";echo "$l2" | tr -d 0-9 | cut -c$i)"*"; #combine character n of line 2 with an asterisk to form the read pair
+#                             done;
+#                          
+#                         elif [[ $nl == 3 ]]; #if there are three lines then there are inserts after both reads, which means that the last character of line 2 is always read 2 character 1
+#                         then n=$(paste -d' ' <(echo "$m" | head -1) <(echo "$l2" | rev | cut -c1) | sed 's/ //'); #char states composed of line 1 + last character of line 2
+#                           l3=$(echo "$m" | head -3 | tail -1); #get line 3 input
+#                           l3inslen=$(echo "$l3" | tr -d -c 0-9); #deletes all non-numeric characters from line 3 to read the length of the insertion
+#                    
+#                           if [[ $l2inslen == $l3inslen ]]; #case where insertion lengths are the same
+#                           then for i in $(seq 1 1 $l2inslen);
+#                             do n=$(echo "$n";(echo "$l2" | tr -d 0-9 | cut -c$i;echo "$l3" | tr -d 0-9 | cut -c$i) | tr -d '\n'); #combine character n of line 2 with character n of line 3 to form the read pair
+#                             done;
+#                           elif [[ $l2inslen < $l3inslen ]]; #case where read1 (l2) insertion length is less than read 2 (l3)
+#                           then for i in $(seq 1 1 $l2inslen);
+#                             do n=$(echo "$n";(echo "$l2" | tr -d 0-9 | cut -c$i;echo "$l3" | tr -d 0-9 | cut -c$i) | tr -d '\n'); #combine character n of line 2 with character n of line 3 to form the read pair
+#                             done;
+#                             #now combine asterisk for line 2 (which is shorter) with character n of line 3 to form the read pair
+#                             for i in $(seq $(($l2inslen+1)) 1 $l3inslen);
+#                               do n=$(echo "$n";echo -n "*";echo "$l3" | tr -d 0-9 | cut -c$i); 
+#                               done;
+#                           elif [[ $l2inslen > $l3inslen ]]; #case where read1 (l2) insertion length is greater than read 2 (l3)
+#                           then for i in $(seq 1 1 $l3inslen);
+#                             do n=$(echo "$n";(echo "$l2" | tr -d 0-9 | cut -c$i;echo "$l3" | tr -d 0-9 | cut -c$i) | tr -d '\n'); #combine character n of line 2 with character n of line 3 to form the read pair
+#                             done;
+#                             #now combine character n of line 2 with asterisk for line 3 (which is shorter) to form the read pair
+#                             for i in $(seq $(($l3inslen+1)) 1 $l2inslen);
+#                               do n=$(echo "$n";echo "$l2" | tr -d 0-9 | cut -c$i)"*"; 
+#                               done;
+#                           fi;    
+#                         fi;
+#                      
+#                    elif [[ $l1len == 2 ]];
+#                      then n=$(echo "$m" | head -1);
+#                        for i in $(seq 1 1 $l2inslen);
+#                          do n=$(echo "$n";echo -n "*";echo "$l2" | tr -d 0-9 | cut -c$i); #place an asterisk for read 1 in combination with character n of line 2 for read 2
+#                          done;
+#                    else echo "ERROR: incompatible string: $m";
+#                    fi;
+#                    
+#                    nls=$(( $(echo "$n" | wc -l) - 1 )); #count the number of lines in the processed insertion, decrement by one since first line will not get a decimal place
+#                    #calculate the line numbering scheme for the processed insertion, will be like: 474 474.1 474.2
+#                    lz=$(echo "$pos";
+#                      for k in $(seq 1 1 $nls);
+#                        do echo "$pos.$k";
+#                        done;)
+#                        
+#                    #paste line numbers to processed insertion base calls and print out.
+#                    paste -d$'\t' <(echo "$lz") <(echo "$n");
+#                    
+#                  done <<< "$j";); #collect processed insertions in variable $lwi
+#              fi;
+#              
+#              #combine lines with insertions with those without, sort, print out without line breaks to be sent to myiupac in a pipe
+#              echo "$ij"$'\n'"$lwi" | sort -t$'\t' -k1,1n | tr "\n" " ";
+
 }
 export -f myinsertion;
 
@@ -130,6 +233,8 @@ export -f mycountqualreadpairs;
 mycon1() {
        site="$1"; #incoming data is a description of sites to process in contigname:site-range format like jcf7180008531951:276-301
        
+
+
        #extract read pairs at target sites using samtools. Obey include, exclude and quality rules from command line
        tmpf=$(/share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" "$bam" "$site" | sort); #get read pairs mapped to contig:site-range in original bwa or gem alignment
        
@@ -157,7 +262,6 @@ mycon1() {
        
        
        
-       
        mfa=""; #initialize variable to contain all the read pair haplotypes
        #below j contains a readgroup-annotated read pair name like @E00558:144:HHGCMCCXY:4:2210:23074:34043_RG:Z:55, that aligns to the current contig:site range
        for j in $m;
@@ -173,6 +277,7 @@ mycon1() {
                /share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" 2>/dev/null | \
                awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
 
+#two pipes
 #           #myrealign takes the reads extracted from the primary alignment ($rpfq) and realigns them independently to the contig as reference
 #           sbm=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$rpfq") 2>/dev/null | /share/apps/samtools sort -O SAM 2>/dev/null); #capture human readable sam file in a variable, it's small since only involved 2 reads and a reference (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
 # 
@@ -239,14 +344,8 @@ mycon1() {
          
        #remove terminal line break in major output variable $mfa
        mfa=$(echo "$mfa" | sed '/^$/d');
-
-
-
-
-
-       
-       
-
+       if [[ "$mfa" == "" ]]; then return; #skip out of this contig:site-range, there is no qualified data
+       fi;
 
        #mydedup() counts and optionally removes duplicate sequences and subsequences that are exactly contained within longer sequences, from the processed multi fasta file
        inf=$(echo "$i" | tr ':' '_'); #value like jcf7180008587925_40-41
@@ -258,7 +357,9 @@ mycon1() {
        rgs="$rgs>rp"; #add an item to the list of readgroups that will allow all sequences to be grepped from the file '>rp'
        
        for k in $rgs;
-       do fon=$(echo "$k" | sed 's/>rp/global/'); #file output name, #replace grep item '>rp' for retrieving all sequences with "global", "global" means all unique haplotypes are counted considering all readgroups simultaneously.
+       do 
+       
+         fon=$(echo "$k" | sed 's/>rp/global/'); #file output name, #replace grep item '>rp' for retrieving all sequences with "global", "global" means all unique haplotypes are counted considering all readgroups simultaneously.
          fonmfa=$(echo "$da" | grep "$k"); #make a readgroup specific mfa file. this has all haploblocks, including duplicated and subsequence
          fonlmfa=$(echo "$da" | grep "$k" | awk -F' ' '!_[$2]++'); #make a readgroup specific, linearized lmfa file. this has end-to-end identical sequences removed via the clever awk clause 
        
@@ -295,8 +396,7 @@ echo "#""$inf"."$fon" $'\t'"$ts1":"$ni":"$ns":$(( $ts3/2 ));
 
 
        done; #for k in $rgs
-       
-        
+
 
        #remake the global output file, with nothing removed, if -d option not selected. Otherwise, when $dodedup == "YES" (-d switch on), make the global output file with identical (sub)sequences removed
        #only do any of this if the user has agreed to print output
@@ -305,6 +405,12 @@ echo "#""$inf"."$fon" $'\t'"$ts1":"$ni":"$ns":$(( $ts3/2 ));
        elif [[ "$nooutput" == "NO" ]] && [[ "$dodedup" == "YES" ]]
        then echo "$fonfa" > "$pd"/alignments/"$inf".global.fa; #produce deduped output for alignment
        fi;
+
+
+
+
+
+
       
 }
 export -f mycon1;
