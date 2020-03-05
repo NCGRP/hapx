@@ -52,6 +52,7 @@ Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.f
 #takes about 4 hrs for 50kb (for 1GB then, 9.132 years on 232 cores)
 #after improvements, now takes about 1.5 hrs for 50kb (for 1GB then, 3.424 years on 232 cores), 5 hrs for 150kb (for 1GB then, 3.8 yrs on 232 cores)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_50kb -a gem -d -s <(for i in $(seq 73000 1 123000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_10kb -a gem -d -s <(for i in $(seq 73000 1 83000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_50kb2 -a gem -d -s <(for i in $(seq 73000 1 123000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_MADS2 -a gem -d -m -s <(for i in $(seq 97315 1 97494); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_MADS -a gem -d -x -s <(for i in $(seq 97315 1 97494); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
