@@ -48,10 +48,12 @@ Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.f
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500d -a gem -d -s <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500dx -a gem -d -x -s <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500step1 -a gem -d -x -s <(for i in $(seq 1 1 157500); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500step2 -a gem -d -x -s <(for i in $(seq 1 1 157500); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
 
 #takes about 4 hrs for 50kb (for 1GB then, 9.132 years on 232 cores)
 #after improvements, now takes about 1.5 hrs for 50kb (for 1GB then, 3.424 years on 232 cores), 5 hrs for 150kb (for 1GB then, 3.8 yrs on 232 cores)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_50kb -a gem -d -s <(for i in $(seq 73000 1 123000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
+#after adding freqs, 0.3hrs for 10kb (1GB 3.4 years), 5hrs for 150kb --no noticeable increase in time
+./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_50kb -a gem -x -s <(for i in $(seq 73000 1 123000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_10kb -a gem -d -s <(for i in $(seq 73000 1 83000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_50kb2 -a gem -d -s <(for i in $(seq 73000 1 123000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_MADS2 -a gem -d -m -s <(for i in $(seq 97315 1 97494); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
@@ -68,28 +70,90 @@ Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.f
 
 #some postprocessing
 #postprocess haploblock counts in log.txt into something plottable
-myq() {
+mytd() {
       i=$1; #a position on the reference is incoming
       for j in $b;
-      do a=$(grep _"$i"\\."$j" numblocks.txt | cut -d: -f4); #number of unique haploblock read pairs mapped to position i
+      do a=$(grep _"$i"\\."$j" "$pd"/numblocks.txt | cut -d: -f4); #number of unique haploblock read pairs mapped to position i
         if [[ "$a" == "" ]]; then a=0; fi; #if no data at position i set number of haploblock read pairs to 0
-        echo "$i $a" >> "$j".txt; #echo to output file specific for the readgroup
-        b=$(grep _"$i"\\."$j" numblocks.txt | cut -d$'\t' -f2 | cut -d: -f1); #total number haploblock read pairs mapped to position i
+        echo "$i $a" >> "$pd"/"$j".txt; #echo to output file specific for the readgroup
+        b=$(grep _"$i"\\."$j" "$pd"/numblocks.txt | cut -d$'\t' -f2 | cut -d: -f1); #total number haploblock read pairs mapped to position i
         if [[ "$b" == "" ]]; then b=0; fi; #if no data at position i set to 0
-        echo "$i $b" >> "$j".total.txt; #echo to output file specific for the readgroup
+        echo "$i $b" >> "$pd"/"$j".total.txt; #echo to output file specific for the readgroup
       done;
 }
-export -f myq;
+export -f mytd;
 
+mytd1() {
+        i=$1; #a position on the reference is incoming
+        a=$(grep "$i"\\."$j" "$pd"/numblocks.txt | cut -d: -f4); #number of unique haploblock read pairs mapped to position i
+        if [[ "$a" == "" ]]; then a=0; fi; #if no data at position i set number of haploblock read pairs to 0
+        echo "$i"."$j $a"; #report result to parallel statement
+}
+export -f mytd1;
+
+mytd2() {
+        i=$1; #a position on the reference is incoming
+        b=$(grep "$i"\\."$j" "$pd"/numblocks.txt | cut -d$'\t' -f2 | cut -d: -f1); #total number haploblock read pairs mapped to position i
+        if [[ "$b" == "" ]]; then b=0; fi; #if no data at position i set to 0
+        echo "$i"."$j $b"; #report result to parallel statement
+}
+export -f mytd2;
+
+
+mypa() {
+       i=$1; #contig:site-range
+       j=$(grep "$i" "$pd"/counts.txt | grep -v global);
+       names=$(cut -d$'\t' -f1 <<<"$j" | sed 's/$/ 0/');
+       counts=$(cut -d$'\t' -f2 <<<"$j");
+       nc=$(head -1 <<<"$counts" | awk -F: '{print NF}'); #number of alleles
+       nr=$(wc -l <<<"$counts"); #number of read groups
+       nz=$(( $nr - 1 )); #number of zeroes needed in a column of allele counts for a private allele to exist
+       for m in $(seq 1 1 $nc);
+         do col=$(cut -d: -f$m <<<"$counts"); #extract the column of allele counts
+           fl=$(grep -n -v 0 <<<"$col"); #show line numbers where alleles are present
+           
+           #if only one line of the column of data has alleles, it is a private allele
+           if [[ $(echo "$fl" | wc -l) == 1 ]];
+           then r=$(cut -d: -f1 <<<"$fl"); #row number of private allele
+             names=$(awk -F' ' -v r=$r '{if (NR==r) $2++; print}' <<<"$names"); #index up by one the row with the private allele
+           fi;
+         done;
+         
+       #report result to parallel statement
+       echo "$names";
+}
+export -f mypa;
+
+pd=$(pwd); export pd;
+
+#count total and distinct haploblocks
 grep ^# log.txt | tr '-' '_' > numblocks.txt;
-a=$(cut -d_ -f3 numblocks.txt | cut -d. -f1 | sort -n -u); #determine set of possible sites
+#a=$(cut -d_ -f3 numblocks.txt | cut -d. -f1 | sort -n -u); #determine set of possible sites
+a=$(cut -d. -f1 numblocks.txt | uniq); #list of contig:site-ranges
 b=$(cut -d. -f2 numblocks.txt | cut -d$'\t' -f1 | sort -u); export b; #determine set of possible read groups
 
-for i in $b;
-  do echo "position $i"distincthblox > $i.txt;
-  echo "position $i"totalhblox > $i.total.txt;
-  done; #initialize output file with a header
-echo "$a" | parallel --bar --keep-order --env myq --env b myq;
+#iterate over read groups
+for j in $b;
+  do echo "Counting distinct alleles, $j";
+    echo "position $i"distincthblox > "$pd"/"$j".txt; #initialize output file with a header for count of distinct alleles within populations
+    echo "$a" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env mytd1 --env pd --env j /home/reevesp/bin/parallel --jobs 96 --env mytd1 --env pd --env j mytd1 >> "$pd"/"$j".txt;
+    
+    echo "Counting all alleles, $j";
+    echo "position $i"totalhblox > "$pd"/"$j".total.txt; #initialize output file with a header for count of all alleles within populations
+    echo "$a" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env mytd2 --env pd --env j /home/reevesp/bin/parallel --jobs 96 --env mytd2 --env pd --env j mytd2 >> "$pd"/"$j".total.txt;
+  done;
+
+
+
+
+#echo "$a" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env mytd --env b --env pd /home/reevesp/bin/parallel --env mytd --env b --env pd mytd;
+
+
+
+
+
+
+
 
 #sort and tab delimit output
 for i in $b;
@@ -102,6 +166,18 @@ for i in $b;
     mv "$i".2.total.txt "$i".total.txt;
   done;
   
+
+#count private alleles
+grep ^'@' log.txt | tr '-' '_' | cut -d$'\t' -f1,3 | sort -t_ -k2,2n > freqs.txt;
+grep ^'@' log.txt | tr '-' '_' | cut -d$'\t' -f1,2 | sort -t_ -k2,2n > counts.txt;
+
+a=$(cut -d. -f1 counts.txt | uniq); #list of contig:site-ranges
+>names.txt;
+echo "$a" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env pd --env mypa /home/reevesp/bin/parallel --jobs 96 --env pd --env mypa mypa >> names.txt; #counting sub
+
+
+
+
 #consolidate files into 1
 paste -d$'\t' global.txt RG_Z_5[0-5].txt global.total.txt RG_Z_*.total.txt | cut -d$'\t' -f1,2,4,6,8,10,12,14,16,18,20,22,24,26,28 > summary.txt;
 

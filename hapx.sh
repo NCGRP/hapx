@@ -357,6 +357,7 @@ mycon1() {
        rgs="$rgs>rp"; #add an item to the list of readgroups that will allow all sequences to be grepped from the file '>rp'
        
        allhash=""; #initialize variable to hold hashes of dna sequences for allele frequency calculation
+       basicstats=""; #will contain NumHblocks:NumIdenticalHblocks:NumIdenticalHblockSubsequences:NumDistinctHblocks
        for k in $rgs;
        do 
        
@@ -393,7 +394,7 @@ mycon1() {
 
 
 ###report counts to parallel statement for log.txt###
-echo "#""$inf"."$fon"$'\t'"$ts1":"$ni":"$ns":"$ts3"; 
+basicstats+=$(echo "#""$inf"."$fon"$'\t'"$ts1":"$ni":"$ns":"$ts3")$'\n'; 
 ###                                               ###
 
 
@@ -402,20 +403,29 @@ echo "#""$inf"."$fon"$'\t'"$ts1":"$ni":"$ns":"$ts3";
          #Set up to calculate allele frequencies.  You must add back the end to end identical sequences to $fonfa, but not the identical subsequences.
          #then hash sequences from the current readgroup ($k), add to a variable with the readgroup ID.
        
-         fonexcsub=$(echo "$fonfa"$'\n'"$e2eident" | sort); #add back end to end identical sequences to unique sequences contained in $fonfa
+         fonexcsub=$(echo "$fonfa"$'\n'"$e2eident"); #add back end to end identical sequences to unique sequences contained in $fonfa
          hashrg=$(cut -d' ' -f2 <<<"$fonexcsub" | python -c "exec(\"import hashlib, sys\nfor line in sys.stdin:\n\tprint hashlib.sha224(line).hexdigest()\")" | sed "s/^/$k /"); #hash dna sequences, label with readgroup
-         allhash+="$hashrg"$'\n'; #add to variable
+         allhash+="$hashrg"$'\n'; #add hashed sequences per readgroup to variable
+         
+
+         
+
+
 
        done; #for k in $rgs
        allhash=$(sed '/^$/d' <<< "$allhash"); #remove empty line at end
 
-echo "$allhash" | awk -F'>' '{print NF}' | sort -u | tr "\n" " " | sed 's/^/hash/';
+
+###report counts to parallel statement for log.txt###
+echo "$basicstats" | sed '/^$/d';
+
 
        #at this point you have all unique sequences in $fonfa since the last member of $rgs is ">rp", which includes all sequences
        #use this as the basis for searching through each of the readgroup sequence sets to calculate frequencies
        uniqhash=$(cut -d' ' -f2 <<<"$fonfa" | python -c "exec(\"import hashlib, sys\nfor line in sys.stdin:\n\tprint hashlib.sha224(line).hexdigest()\")"); #get hash for unique sequences
 
        #calculate allele frequency for all unique alleles in each readgroup for current contig:site-range
+       reportctsfreqs=""
        for k in $rgs;
        do fon=$(echo "$k" | sed 's/>rp/global/'); #file output name, #replace grep item '>rp' for retrieving all sequences with "global", "global" means all unique haplotypes are counted considering all readgroups simultaneously.
          summ=$(grep ^"$k " <<<"$allhash" | wc -l); #total number of alleles observed
@@ -427,8 +437,13 @@ echo "$allhash" | awk -F'>' '{print NF}' | sort -u | tr "\n" " " | sed 's/^/hash
              cts+="$nla":;
              freqs+="$nlf":; 
            done;
-         echo "&""$inf"."$fon"$'\t'"$cts"$'\t'"$freqs" | sed 's/:$//' | sed "s/:\t/\t/";
+         reportctsfreqs+=$(echo "@""$inf"."$fon"$'\t'"$cts"$'\t'"$freqs" | sed 's/:$//' | sed "s/:\t/\t/")$'\n'; #accumulate variable to report allele counts and frequencies
        done;
+###report counts to parallel statement for log.txt###
+echo "$reportctsfreqs" | sed '/^$/d'; #report to parallel statement
+
+
+
 
 
 
