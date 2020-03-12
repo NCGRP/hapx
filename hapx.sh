@@ -221,10 +221,10 @@ export -f myinsertion;
 
 #mycountqualreadpairs counts how many paired reads and unpaired reads map to the target sites, receives info in $tmpf and $site from mycon1()
 mycountqualreadpairs() {
-                       p=$(echo "$tmpf" | cut -d$'\t' -f1 | sort | uniq -c | grep ^" \+2 "); #paired reads
-                       s=$(echo "$tmpf" | cut -d$'\t' -f1 | sort | uniq -c | grep ^" \+1 "); #single ends of paired reads
-                       pp=$(echo "$p" | awk 'NF' | wc -l); #number of paired reads (awk 'NF' removes empty lines)
-                       ss=$(echo "$s" | awk 'NF' | wc -l); #number of single ends of paired reads
+                       p=$(cut -d$'\t' -f1 <<<"$tmpf" | sort | uniq -c | grep ^" \+2 "); #paired reads
+                       s=$(cut -d$'\t' -f1 <<<"$tmpf" | sort | uniq -c | grep ^" \+1 "); #single ends of paired reads
+                       pp=$(awk 'NF' <<<"$p" | wc -l); #number of paired reads (awk 'NF' removes empty lines)
+                       ss=$(awk 'NF' <<<"$s" | wc -l); #number of single ends of paired reads
                        echo "$site $pp $ss";
 }
 export -f mycountqualreadpairs;
@@ -243,7 +243,7 @@ mycon1() {
        else f=$(mycountqualreadpairs);
        fi;
        
-       g=$(echo "$f" | awk -F' ' '$2+$3!=0 {print $0}'); #remove contig from consideration if there are 0 reads (no paired reads:$2, no unpaired reads:$3) that align (this could also be a variable that supports a cutoff)
+       g=$(awk -F' ' '$2+$3!=0 {print $0}' <<< "$f"); #remove contig from consideration if there are 0 reads (no paired reads:$2, no unpaired reads:$3) that align (this could also be a variable that supports a cutoff)
        if [[ "$g" == "" ]]; then return;
        fi;
 
@@ -252,7 +252,7 @@ mycon1() {
        #myreconfq reconstructs a single fastq file that contains exclusively both reads of a read pair from a sam file
        i="$site"; #input is a description of sites to process in contigname:range format like jcf7180008531951:276-301
                #the sites are accessed from the variable $tmpf below
-       h=$(echo "$i" | cut -d':' -f1); #just the contig name
+       h=$(cut -d':' -f1 <<<"$i"); #just the contig name
  
        s=$(awk -F$'\t' -v rgf=$rgf '{print "@"$1"_"$rgf,$10,"+",$11}' <(echo "$tmpf") | tr " " "\n" | sed '/^$/d');
        
@@ -290,23 +290,23 @@ mycon1() {
            fi;
  
            #test whether re-realignment still contains reads after removing unmapped reads, if not skip to next read pair
-           lnsam=$(echo "$x2xsam" | wc -l);
+           lnsam=$(wc -l <<<"$x2xsam");
            if [[ "$lnsam" < 3 ]]; then continue; fi; 
 
            #mymakehapblocks() processes read pairs into a single contiguous sequence, adds NNNs where opposing read pairs do not overlap to pad relative to the reference, adds IUPAC redundancy codes for conflicts between pairs of a read, removes deletion coding, retains insertions
-           rp=$(echo "$x2xsam" | awk -F$'\t' -v h=$h '$3==h{print $1}' | sort -u | tr ":" "_"); #extract the unique read name from the sam formatted data that contains a single mapped read pair
-           rname=$(echo "$i" | tr ':' '_')"_$rp"; #get a root name for the read pair/contig alignment
+           rp=$(awk -F$'\t' -v h=$h '$3==h{print $1}' <<<"$x2xsam" | sort -u | tr ":" "_"); #extract the unique read name from the sam formatted data that contains a single mapped read pair
+           rname=$(tr ':' '_' <<<"$i")"_$rp"; #get a root name for the read pair/contig alignment
 
            mp=$(/share/apps/samtools mpileup -A <(echo "$x2xsam") 2>/dev/null); #form the pileup file, use -A to include orphan reads. samtools mpileup by default excludes improper pairs. in hapx, bwa mem will find no proper pairs because too few reads are used during alignment
 
            #Extract the pos and base columns, remove read start ^., read end $, remove deletion indicators (e.g. -2AC, they are followed with *), pass to myinsertion subroutine to control insertions, then to myiupac to recode conflicts as ambiguous and produce the consensus sequence
-           base1=$(echo "$mp" | cut -d$'\t' -f2,5 | sed 's/\^.//g' | sed 's/\$//g' | sed 's/-.*//g' | tr "\n" " " | myinsertion | myiupac); #haplotype extraction, unpadded as of now
+           base1=$(cut -d$'\t' -f2,5 <<<"$mp"| sed 's/\^.//g' | sed 's/\$//g' | sed 's/-.*//g' | tr "\n" " " | myinsertion | myiupac); #haplotype extraction, unpadded as of now
 
            #Deal with contiguity and padding
-           csq=$(myconseq "$(echo "$mp" | cut -d$'\t' -f2)" | grep -v "^1\-" | sed 's/-/ 1 /g'); #identify regions where reads are not aligned consecutively to the reference, exclude the range from 1-start of overlap, set up to use as an interval for seq command
+           csq=$(myconseq "$(cut -d$'\t' -f2)" <<<"$mp" | grep -v "^1\-" | sed 's/-/ 1 /g'); #identify regions where reads are not aligned consecutively to the reference, exclude the range from 1-start of overlap, set up to use as an interval for seq command
            
            #calculate the maximum pad size, if any pad is larger than $maxp continue to next contig:read-pair
-           maxn=$(echo "$csq" | awk -F' ' '{print $3 - $1}' | sort -nr | head -1); 
+           maxn=$(awk -F' ' '{print $3 - $1}' <<<"$csq" | sort -nr | head -1); 
            if [[ "$maxn" > "$maxp" ]];
            then continue;
            fi;
@@ -327,8 +327,8 @@ mycon1() {
            base2=$(echo "$base1"$'\n'"$pads" | sort -t' ' -k1,1n | sed 's/x/-/g' | awk 'NF');
            
            #revise the read pair name so that readgroup appears in front
-           nrname1=$(echo "$rname" | rev | cut -d'_' -f1-3 | rev); #readgroup info from end of string
-           nrname2=$(echo "$rname" | rev | cut -d'_' -f4- | rev); #rest of string, excluding readgroup info
+           nrname1=$(rev <<<"$rname" | cut -d'_' -f1-3 | rev); #readgroup info from end of string
+           nrname2=$(rev <<<"$rname" | cut -d'_' -f4- | rev); #rest of string, excluding readgroup info
            nrname="$nrname1"_"$nrname2";
            
            #base3 contains the processed haplotype as a fasta file, deletions relative to reference removed.
@@ -348,12 +348,12 @@ mycon1() {
 
 
        #mydedup() counts and optionally removes duplicate sequences and subsequences that are exactly contained within longer sequences, from the processed multi fasta file
-       inf=$(echo "$i" | tr ':' '_'); #value like jcf7180008587925_40-41
+       inf=$(tr ':' '_' <<<"$i"); #value like jcf7180008587925_40-41
        
        #count duplicated sequences and subsequences
        # to this process supply each read group separately, and everything together
        da=$(sed -e '/^>/s/$/@/' -e 's/^>/#/' <(echo "$mfa") | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}'); #linearize the data set
-       rgs=$(echo "$da" | cut -d'_' -f2-4 | sort -u | tr '\n' ' '); #acquire a list of readgroups
+       rgs=$(cut -d'_' -f2-4 <<<"$da"| sort -u | tr '\n' ' '); #acquire a list of readgroups
        rgs="$rgs>rp"; #add an item to the list of readgroups that will allow all sequences to be grepped from the file '>rp'
        
        allhash=""; #initialize variable to hold hashes of dna sequences for allele frequency calculation
@@ -361,33 +361,33 @@ mycon1() {
        for k in $rgs;
        do 
        
-         fon=$(echo "$k" | sed 's/>rp/global/'); #file output name, #replace grep item '>rp' for retrieving all sequences with "global", "global" means all unique haplotypes are counted considering all readgroups simultaneously.
-         fonmfa=$(echo "$da" | grep "$k" | sort); #make a readgroup specific mfa file. this has all haploblocks, including duplicated and subsequence
-         fonlmfa=$(echo "$fonmfa" | awk -F' ' '!_[$2]++' | sort); #make a readgroup specific, linearized lmfa file. this keeps only one of end-to-end identical sequences via the clever awk clause
+         fon=$(sed 's/>rp/global/' <<<"$k"); #file output name, #replace grep item '>rp' for retrieving all sequences with "global", "global" means all unique haplotypes are counted considering all readgroups simultaneously.
+         fonmfa=$(grep "$k" <<<"$da" | sort); #make a readgroup specific mfa file. this has all haploblocks, including duplicated and subsequence
+         fonlmfa=$(awk -F' ' '!_[$2]++' <<<"$fonmfa"| sort); #make a readgroup specific, linearized lmfa file. this keeps only one of end-to-end identical sequences via the clever awk clause
          e2eident=$(comm -2 -3 <(echo "$fonmfa") <(echo "$fonlmfa")); #collect sequences that were removed as end-to-end identical, these will be added back later to calculate allele frequencies
        
          #remove identical subsequences as a means of counting them
          rem="";
          while read llu;
-           do qu=$(echo "$llu" | cut -d' ' -f2); #get sequence string
-             qt=$(echo "$llu" | cut -d' ' -f1); #get sample name
+           do qu=$(cut -d' ' -f2 <<<"$llu"); #get sequence string
+             qt=$(cut -d' ' -f1 <<<"$llu"); #get sample name
              ct=$(grep "$qu" <(echo "$fonlmfa") | wc -l); #count the number of lines that contain the sequence string, if > 1 it is a substring and can be deleted
              if [[ "$ct" > 1 ]];
              then rem+="$llu"$'\n'; #add sequence to list to remove if it is a subsequence of other read pairs
              fi;
            done <<<"$fonlmfa";
-         rem=$(echo "$rem" | sed '/^$/d'); #remove trailing blank line
+         rem=$(sed '/^$/d' <<<"$rem"); #remove trailing blank line
        
          if [[ "$rem" == "" ]];
-         then fonfa=$(echo "$fonlmfa" | sort); #there are no identical subsequences so just copy to a final file name
+         then fonfa=$(sort <<<"$fonlmfa"); #there are no identical subsequences so just copy to a final file name
          else
            fonfa=$(grep -v -F -f <(echo "$rem") <(echo "$fonlmfa") | sort); #remove all lines that contain sequences that are subsequences of other lines
          fi;
        
          #count identical sequences and subsequences removed
-         ts1=$(echo "$fonmfa" | wc -l); #number of sequences at start
-         ts2=$(echo "$fonlmfa" | wc -l); #number of sequences after removing identical
-         ts3=$(echo "$fonfa" | wc -l);  #number of sequence after removing identical and subsequences
+         ts1=$(wc -l <<<"$fonmfa"); #number of sequences at start
+         ts2=$(wc -l <<<"$fonlmfa"); #number of sequences after removing identical
+         ts3=$(wc -l <<<"$fonfa");  #number of sequence after removing identical and subsequences
          ni=$(( $ts1 - $ts2 )); #number of identical sequences
          ns=$(( $ts2 - ($ts3) )); #number of identical subsequences
 
@@ -427,7 +427,7 @@ echo "$basicstats" | sed '/^$/d';
        #calculate allele frequency for all unique alleles in each readgroup for current contig:site-range
        reportctsfreqs=""
        for k in $rgs;
-       do fon=$(echo "$k" | sed 's/>rp/global/'); #file output name, #replace grep item '>rp' for retrieving all sequences with "global", "global" means all unique haplotypes are counted considering all readgroups simultaneously.
+       do fon=$(sed 's/>rp/global/' <<<"$k"); #file output name, #replace grep item '>rp' for retrieving all sequences with "global", "global" means all unique haplotypes are counted considering all readgroups simultaneously.
          summ=$(grep ^"$k " <<<"$allhash" | wc -l); #total number of alleles observed
          cts=""; #allele counts
          freqs=""; #allele frequencies
@@ -441,15 +441,6 @@ echo "$basicstats" | sed '/^$/d';
        done;
 ###report counts to parallel statement for log.txt###
 echo "$reportctsfreqs" | sed '/^$/d'; #report to parallel statement
-
-
-
-
-
-
-###STARTING HERE, figure out how to report table of allele frequencies at this $site, probably you have a column for each allele (just give them an integer) and its frequency in each $site with valid data.
-###You are going to have to jigger around the echo statement above that reports data 
-
 
 
 
@@ -477,9 +468,9 @@ export -f mycon1;
 myalignhaps() {
               i=$1;
               thr=$(lscpu | grep "^CPU(s):" | awk '{print $2}'); #max threads
-              rr=$(echo "$i" | cut -d'_' -f1); #reference contig name, e.g. jcf7180008454378
-              ss=$(echo "$i" | cut -d'.' -f1); #refcontig+siterange, e.g. jcf7180008454378_303-304
-              tt=$(echo "$ss" | cut -d'_' -f2); #siterange, e.g. 303-304
+              rr=$(cut -d'_' -f1 <<<"$i"); #reference contig name, e.g. jcf7180008454378
+              ss=$(cut -d'.' -f1 <<<"$i"); #refcontig+siterange, e.g. jcf7180008454378_303-304
+              tt=$(cut -d'_' -f2 <<<"$ss"); #siterange, e.g. 303-304
 
               #final mapping with bwa
                /share/apps/bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" 2>/dev/null | \
@@ -491,9 +482,9 @@ myalignhaps() {
               #add reference sequence to the multi fasta of processed haplotypes
               flankingl=30; #number of bp to extract on each side of the theoretical max and min boundaries of the haplotypes aligned to the reference
               longesth=$(grep -v ^'>' "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1); #find the longest haplotype
-              le=$(( $(echo "$tt" | cut -d'-' -f1) - $longesth - $flankingl )); #determine the left end of the subsequence to extract from the reference contig
+              le=$(( $(cut -d'-' -f1 <<<"$tt") - $longesth - $flankingl )); #determine the left end of the subsequence to extract from the reference contig
               if (( $le < 0 )); then le=1; fi; #no negative positions allowed
-              re=$(( $(echo "$tt" | cut -d'-' -f2) + $longesth + $flankingl )); #determine the right end of the subsequence to extract from the reference contig
+              re=$(( $(cut -d'-' -f2 <<<"$tt") + $longesth + $flankingl )); #determine the right end of the subsequence to extract from the reference contig
               
               refname=$(head -1 "$pd"/"$rr"_ref.txt | sed 's/$/_'$le'_'$re'/'); #name for reference sequence fragment to be included in muscle alignment
               trs=$(grep -v ^'>' "$pd"/"$rr"_ref.txt | tr -d '\n' | cut -c"$le"-"$re"); #add the trimmed reference subsequence to the fasta files for muscle alignment 
@@ -503,9 +494,9 @@ myalignhaps() {
               faTMP=$(/share/apps/muscle -quiet -in <(echo "$muscin")); #capture muscle fasta alignment output in a variable
               
               #put reference sequence at top of muscle output file and sort by read group
-              faTMP2=$(echo "$faTMP" | sed -e '/^>/s/$/@/' -e 's/^>/#>/' | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d'); #make output 1 line per sequence
-              lrs=$(echo "$faTMP2" | grep ^"$refname" | tr " " "\n"); #get the linearized reference sequence fragment, to add to top of muscle output
-              smuscout=$(echo "$faTMP1" | grep -v ^"$refname" | sort -t'_' -k4,4 | tr " " "\n"); #sort muscle aligned haplotypes, to add to revised muscle output
+              faTMP2=$(sed -e '/^>/s/$/@/' -e 's/^>/#>/' <<<"$faTMP"| tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d'); #make output 1 line per sequence
+              lrs=$(grep ^"$refname" <<<"$faTMP2" | tr " " "\n"); #get the linearized reference sequence fragment, to add to top of muscle output
+              smuscout=$(grep -v ^"$refname" <<<"$faTMP1"| sort -t'_' -k4,4 | tr " " "\n"); #sort muscle aligned haplotypes, to add to revised muscle output
               echo "$lrs"$'\n'"$smuscout" >  "$pd"/alignments/"$ss"_aligned_haps.fa
 }
 export -f myalignhaps;
@@ -679,7 +670,7 @@ echo "Reconstructing haploblocks:";
 
 
 #souped up double-parallel statment to oversubscribe processors and get CPU usage up to 100%
-#This approach does not work.
+#This approach does not work improve cpu usage.
 #machfile="/home/reevesp/machines";
 #nnode=$(wc -l "$machfile" | cut -d' ' -f1);
 #numloc=$(echo "$e" | wc -l);
