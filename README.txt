@@ -70,23 +70,10 @@ Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.f
 
 #some postprocessing
 #postprocess haploblock counts in log.txt into something plottable
-# mytd() {
-#       i=$1; #a position on the reference is incoming
-#       for j in $b;
-#       do a=$(grep _"$i"\\."$j" "$pd"/numblocks.txt | cut -d: -f4); #number of unique haploblock read pairs mapped to position i
-#         if [[ "$a" == "" ]]; then a=0; fi; #if no data at position i set number of haploblock read pairs to 0
-#         echo "$i $a" >> "$pd"/"$j".txt; #echo to output file specific for the readgroup
-#         b=$(grep _"$i"\\."$j" "$pd"/numblocks.txt | cut -d$'\t' -f2 | cut -d: -f1); #total number haploblock read pairs mapped to position i
-#         if [[ "$b" == "" ]]; then b=0; fi; #if no data at position i set to 0
-#         echo "$i $b" >> "$pd"/"$j".total.txt; #echo to output file specific for the readgroup
-#       done;
-# }
-# export -f mytd;
-
 mytd1() {
         i=$1; #a position on the reference is incoming
         a=$(grep "$i"\\."$k" "$pd"/numblocks.txt | cut -d: -f4); #number of unique haploblock read pairs mapped to position i in the readgroup
-        if [[ "$a" == "" ]]; then a=0; fi; #if no data at position i set number of haploblock read pairs to 0
+        if [[ "$a" == "" ]]; then a="?"; fi; #if no data at position i set number of haploblock read pairs to 0
         echo "$i"."$k $a"; #report result to parallel statement
 }
 export -f mytd1;
@@ -94,11 +81,10 @@ export -f mytd1;
 mytd2() {
         i=$1; #a position on the reference is incoming
         b=$(grep "$i"\\."$k" "$pd"/numblocks.txt | cut -d$'\t' -f2 | cut -d: -f1); #total number haploblock read pairs mapped to position i in the readgroup
-        if [[ "$b" == "" ]]; then b=0; fi; #if no data at position i set to 0
+        if [[ "$b" == "" ]]; then b="?"; fi; #if no data at position i set to 0
         echo "$i"."$k $b"; #report result to parallel statement
 }
 export -f mytd2;
-
 
 mypa() {
        i=$1; #contig:site-range
@@ -124,6 +110,17 @@ mypa() {
 }
 export -f mypa;
 
+mypadpa() {
+          aa=$1;
+          cc=$(grep "$aa.$dd" "$pd"/names.txt);
+          if [[ "$cc" == "" ]];
+          then echo "$aa.$dd ?"; #if readgroup not found print a ?
+          else echo "$cc";
+          fi;
+}
+export -f mypadpa;
+
+
 pd=$(pwd); export pd;
 
 #count total and distinct haploblocks
@@ -131,39 +128,19 @@ grep ^# log.txt | tr '-' '_' > numblocks.txt;
 a=$(cut -d. -f1 numblocks.txt | uniq); #list of contig:site-ranges
 b=$(cut -d. -f2 numblocks.txt | cut -d$'\t' -f1 | sort -u); export b; #determine set of possible read groups
 
-#iterate over read groups
+#iterate over read groups to count haploblocks
 for j in $b;
   do k="$j"; export k; #do this so iterator can be sent to nodes using --sshloginfile
     echo "$j: counting distinct alleles";
-    echo "position $i distincthblox" > "$pd"/"$j".txt; #initialize output file with a header for count of distinct alleles within populations
-    echo "$a" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env mytd1 --env pd --env k /home/reevesp/bin/parallel --jobs 96 --env mytd1 --env pd --env k mytd1 >> "$pd"/"$j".txt;
-    #echo "$a" | parallel --jobs 1 --pipe -N960 --env mytd1 --env pd --env j /home/reevesp/bin/parallel --jobs 96 --env mytd1 --env pd --env j mytd1 >> "$pd"/"$j".txt;
+    >"$pd"/"$j".distallel.txt; #initialize output file with a header for count of distinct alleles within populations
+    echo "$a" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env mytd1 --env pd --env k /home/reevesp/bin/parallel --jobs 96 --env mytd1 --env pd --env k mytd1 >> "$pd"/"$j".distallel.txt;
+    #echo "$a" | parallel --jobs 1 --pipe -N960 --env mytd1 --env pd --env j /home/reevesp/bin/parallel --jobs 96 --env mytd1 --env pd --env j mytd1 >> "$pd"/"$j".distallel.txt;
     
     echo "$j: counting all alleles";
-    echo "position $i totalhblox" > "$pd"/"$j".total.txt; #initialize output file with a header for count of all alleles within populations
-    echo "$a" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env mytd2 --env pd --env k /home/reevesp/bin/parallel --jobs 96 --env mytd2 --env pd --env k mytd2 >> "$pd"/"$j".total.txt;
+    >"$pd"/"$j".totallel.txt; #initialize output file with a header for count of all alleles within populations
+    echo "$a" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env mytd2 --env pd --env k /home/reevesp/bin/parallel --jobs 96 --env mytd2 --env pd --env k mytd2 >> "$pd"/"$j".totallel.txt;
   done;
 
-
-
-
-
-
-
-
-
-
-#sort and tab delimit output
-for i in $b;
-  do sort -t' ' -k1,1n "$i".txt | tr ' ' '\t' > "$i".2.txt;
-    sort -t' ' -k1,1n "$i".total.txt | tr ' ' '\t' > "$i".2.total.txt;
-  done;
-#swap back to original filename
-for i in $b; 
-  do mv "$i".2.txt "$i".txt;
-    mv "$i".2.total.txt "$i".total.txt;
-  done;
-  
 
 #count private alleles
 grep ^'@' log.txt | tr '-' '_' | cut -d$'\t' -f1,3 | sort -t_ -k2,2n > freqs.txt;
@@ -173,9 +150,37 @@ c=$(cut -d. -f1 counts.txt | uniq); #list of contig:site-ranges
 >names.txt;
 echo "$c" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env pd --env mypa /home/reevesp/bin/parallel --jobs 96 --env pd --env mypa mypa >> names.txt; #counting sub
 
+#pad the file containing counts of private alleles with "?" for contig:site-range_readgroup combinations that weren't found
+for bb in $b;
+do >"$bb".privallel.txt; #create an output file for the readgroup
+  dd="$bb"; export dd; #transfer iterator to variable that can be exported for gnu parallel
+  echo "$a" | sed 's/#/@/g' | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env pd --env dd --env mypadpa \
+                              /home/reevesp/bin/parallel --jobs 96 --env pd --env dd --env mypadpa mypadpa >> "$bb".privallel.txt;
 
+#  for aa in $(echo $a | sed 's/#/@/g');
+#  do cc=$(grep "$aa.$bb" "$pd"/names.txt);
+#    if [[ "$cc" == "" ]];
+#    then echo "$aa.$bb ?" >> "$bb".privallel.txt; #if readgroup not found print a ?
+#    else echo "$cc" >> "$bb".privallel.txt;
+#    fi;
+#  done;
+done;
+
+#sort and tab delimit output
+for i in $b;
+  do sort -t' ' -k1,1n "$i".distallel.txt | sed 's/^#//' | sed "1i position $i.distallel" | tr ' ' '\t' > "$i".2.distallel.txt;
+    sort -t' ' -k1,1n "$i".totallel.txt | sed 's/^#//' | sed "1i position $i.totallel" | tr ' ' '\t'  > "$i".2.totallel.txt;
+    sort -t' ' -k1,1n "$i".privallel.txt | sed 's/^@//' | sed "1i position $i.privallel" | tr ' ' '\t'  > "$i".2.privallel.txt;
+  done;
+#swap back to original filename
+for i in $b; 
+  do mv "$i".2.distallel.txt "$i".distallel.txt;
+    mv "$i".2.totallel.txt "$i".totallel.txt;
+    mv "$i".2.privallel.txt "$i".privallel.txt;
+  done;
 
 
 #consolidate files into 1
-paste -d$'\t' global.txt RG_Z_5[0-5].txt global.total.txt RG_Z_*.total.txt | cut -d$'\t' -f1,2,4,6,8,10,12,14,16,18,20,22,24,26,28 > summary.txt;
+paste -d$'\t' global.distallel.txt RG_Z_*.distallel.txt global.totallel.txt RG_Z_*.totallel.txt global.privallel.txt RG_Z_*.privallel.txt\
+  | cut -d$'\t' -f1,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42 > summary.txt;
 
