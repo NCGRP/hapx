@@ -156,21 +156,13 @@ do >"$bb".privallel.txt; #create an output file for the readgroup
   dd="$bb"; export dd; #transfer iterator to variable that can be exported for gnu parallel
   echo "$a" | sed 's/#/@/g' | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env pd --env dd --env mypadpa \
                               /home/reevesp/bin/parallel --jobs 96 --env pd --env dd --env mypadpa mypadpa >> "$bb".privallel.txt;
-
-#  for aa in $(echo $a | sed 's/#/@/g');
-#  do cc=$(grep "$aa.$bb" "$pd"/names.txt);
-#    if [[ "$cc" == "" ]];
-#    then echo "$aa.$bb ?" >> "$bb".privallel.txt; #if readgroup not found print a ?
-#    else echo "$cc" >> "$bb".privallel.txt;
-#    fi;
-#  done;
 done;
 
 #sort and tab delimit output
 for i in $b;
-  do sort -t' ' -k1,1n "$i".distallel.txt | sed 's/^#//' | sed "1i position $i.distallel" | tr ' ' '\t' > "$i".2.distallel.txt;
-    sort -t' ' -k1,1n "$i".totallel.txt | sed 's/^#//' | sed "1i position $i.totallel" | tr ' ' '\t'  > "$i".2.totallel.txt;
-    sort -t' ' -k1,1n "$i".privallel.txt | sed 's/^@//' | sed "1i position $i.privallel" | tr ' ' '\t'  > "$i".2.privallel.txt;
+  do sort -t'_' -k1,1 "$i".distallel.txt | sort -t'_' -k2,2n | sed 's/^#//' | sed "1i position $i.distallel" | tr ' ' '\t' > "$i".2.distallel.txt;
+    sort -t'_' -k1,1 "$i".totallel.txt | sort -t'_' -k2,2n | sed 's/^#//' | sed "1i position $i.totallel" | tr ' ' '\t'  > "$i".2.totallel.txt;
+    sort -t'_' -k1,1 "$i".privallel.txt | sort -t'_' -k2,2n | sed 's/^@//' | sed "1i position $i.privallel" | tr ' ' '\t'  > "$i".2.privallel.txt;
   done;
 #swap back to original filename
 for i in $b; 
@@ -182,5 +174,5 @@ for i in $b;
 
 #consolidate files into 1
 paste -d$'\t' global.distallel.txt RG_Z_*.distallel.txt global.totallel.txt RG_Z_*.totallel.txt global.privallel.txt RG_Z_*.privallel.txt\
-  | cut -d$'\t' -f1,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42 > summary.txt;
+  | cut -d$'\t' -f1,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42 | sed 's/\.global//'> summary.txt;
 
