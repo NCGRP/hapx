@@ -348,7 +348,7 @@ mycon1() {
 
 
        #mydedup() counts and optionally removes duplicate sequences and subsequences that are exactly contained within longer sequences, from the processed multi fasta file
-       inf=$(tr ':' '_' <<<"$i"); #value like jcf7180008587925_40-41
+       inf=$(tr ':' '_' <<<"$i"); #make value like jcf7180008587925_40-41 from jcf7180008587925:40-41
        
        #count duplicated sequences and subsequences
        # to this process supply each read group separately, and everything together
@@ -451,9 +451,9 @@ echo "$reportctsfreqs" | sed '/^$/d'; #report to parallel statement
        #remake the global output file, with nothing removed, if -d option not selected. Otherwise, when $dodedup == "YES" (-d switch on), make the global output file with identical (sub)sequences removed
        #only do any of this if the user has agreed to print output
        if [[ "$nooutput" == "NO" ]] && [[ "$dodedup" == "NO" ]]; 
-       then sed -e '/^>/s/$/@/' -e 's/^>/#/' <(echo "$mfa") | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}' | tr " " "\n" > "$pd"/alignments/"$inf".global.fa; #produce undeduped output for alignment
+       then sed -e '/^>/s/$/@/' -e 's/^>/#/' <(echo "$mfa") | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}' | tr " " "\n" > "$pd"/alignments/"$i".global.fa; #produce undeduped output for alignment
        elif [[ "$nooutput" == "NO" ]] && [[ "$dodedup" == "YES" ]]
-       then echo "$fonfa" > "$pd"/alignments/"$inf".global.fa; #produce deduped output for alignment
+       then echo "$fonfa" > "$pd"/alignments/"$i".global.fa; #produce deduped output for alignment
        fi;
 
 
