@@ -482,9 +482,11 @@ myalignhaps() {
               #add reference sequence to the multi fasta of processed haplotypes
               flankingl=30; #number of bp to extract on each side of the theoretical max and min boundaries of the haplotypes aligned to the reference
               longesth=$(grep -v ^'>' "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1); #find the longest haplotype
+              reflength=$(tail -1 "$pd"/"$rr"_ref.txt | awk '{print length}');
               le=$(( $(cut -d'-' -f1 <<<"$tt") - $longesth - $flankingl )); #determine the left end of the subsequence to extract from the reference contig
               if (( $le < 0 )); then le=1; fi; #no negative positions allowed
               re=$(( $(cut -d'-' -f2 <<<"$tt") + $longesth + $flankingl )); #determine the right end of the subsequence to extract from the reference contig
+              if (( $re > $reflength )); then re=$reflength; fi; #cannot exceed the right end of the reference or you will get an error when you try to extract the 30 bp on each end elongated fragment
               
               refname=$(head -1 "$pd"/"$rr"_ref.txt | sed 's/$/_'$le'_'$re'/'); #name for reference sequence fragment to be included in muscle alignment
               trs=$(grep -v ^'>' "$pd"/"$rr"_ref.txt | tr -d '\n' | cut -c"$le"-"$re"); #add the trimmed reference subsequence to the fasta files for muscle alignment 
@@ -494,9 +496,9 @@ myalignhaps() {
               faTMP=$(/share/apps/muscle -quiet -in <(echo "$muscin")); #capture muscle fasta alignment output in a variable
               
               #put reference sequence at top of muscle output file and sort by read group
-              faTMP2=$(sed -e '/^>/s/$/@/' -e 's/^>/#>/' <<<"$faTMP"| tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d'); #make output 1 line per sequence
+              faTMP2=$(sed -e '/^>/s/$/@/' -e 's/^>/#>/' <<<"$faTMP" | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d'); #make output 1 line per sequence
               lrs=$(grep ^"$refname" <<<"$faTMP2" | tr " " "\n"); #get the linearized reference sequence fragment, to add to top of muscle output
-              smuscout=$(grep -v ^"$refname" <<<"$faTMP1"| sort -t'_' -k4,4 | tr " " "\n"); #sort muscle aligned haplotypes, to add to revised muscle output
+              smuscout=$(grep -v ^"$refname" <<<"$faTMP2"| sort -t'_' -k4,4 | tr " " "\n"); #sort muscle aligned haplotypes, to add to revised muscle output
               echo "$lrs"$'\n'"$smuscout" >  "$pd"/alignments/"$ss"_aligned_haps.fa
 }
 export -f myalignhaps;
