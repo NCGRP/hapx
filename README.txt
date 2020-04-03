@@ -12,7 +12,7 @@ Requirements (in path):
 5) muscle
 
 Usage: hapx ref bam sites
-Usage: hapx -r ref -b bam -o out -a alnr [-f inc] [-F exc] [-q qual] [-p maxp] [-d -m -x] -s sites
+Usage: hapx -r ref -b bam -o out -a alnr [-f inc] [-F exc] [-q qual] [-p maxp] [-d -mm -mb -x] -s sites
 where,
 ref = path to reference genome sequence in multi-fasta format [required]
 bam = path to bam file of reads aligned to ref [required]
@@ -30,7 +30,8 @@ qual = Samtools view -q option (minimum mapping quality of included reads) [defa
 maxp = allow no more than maxp Ns between read pairs. This prevents read pairs from being assembled into an NNN-padded haploblock when they are too far apart.  You may want to set -p maxp according to average library insert size [default 1000];
 
 -d = delete duplicate sequences and subsequences from output
--m = map (bwa mem) and align (muscle) extracted haploblocks
+-mm = align (muscle) extracted haploblocks
+-mb = map (bwa mem) extracted haploblocks
 -x = do not write any output files except log (makes -d and -m irrelevant)
 
 Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta /share/space/reevesp/patellifolia/xtr/AllP.merged.bam bwamem jcf7180008454378:303-304,jcf7180008531951:103-495,jcf7180008395354:294-295,jcf7180008827236:1031-1032,jcf7180008378511:277-278,jcf7180008637475:7-8,jcf7180008587925:106-107,jcf7180008527965:177-178,jcf7180008578969:84-85,jcf7180008484650:470-471,jcf7180008856767:98710-98886;

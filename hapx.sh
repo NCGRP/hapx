@@ -472,13 +472,7 @@ myalignhaps() {
               ss=$(cut -d'.' -f1 <<<"$i"); #refcontig+siterange, e.g. jcf7180008454378_303-304
               tt=$(cut -d'_' -f2 <<<"$ss"); #siterange, e.g. 303-304
 
-              #final mapping with bwa
-               /share/apps/bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" 2>/dev/null | \
-                  /share/apps/samtools sort -O BAM --threads "$thr" 2>/dev/null | \
-                  /share/apps/samtools view -F 2048 -O BAM 2>/dev/null > "$pd"/alignments/"$ss"_aligned_haps.bam; #-F 2048 excludes supplementary alignments
-              /share/apps/samtools index "$pd"/alignments/"$ss"_aligned_haps.bam 2>/dev/null;
-              
-              #final multiple alignment with muscle, include a fragment of the reference contig overlapping the haplotypes
+              #set up for final alignments, include a fragment of the reference contig overlapping the haplotypes
               #add reference sequence to the multi fasta of processed haplotypes
               flankingl=30; #number of bp to extract on each side of the theoretical max and min boundaries of the haplotypes aligned to the reference
               longesth=$(grep -v ^'>' "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1); #find the longest haplotype
@@ -490,16 +484,46 @@ myalignhaps() {
               
               refname=$(head -1 "$pd"/"$rr"_ref.txt | sed 's/$/_'$le'_'$re'/'); #name for reference sequence fragment to be included in muscle alignment
               trs=$(grep -v ^'>' "$pd"/"$rr"_ref.txt | tr -d '\n' | cut -c"$le"-"$re"); #add the trimmed reference subsequence to the fasta files for muscle alignment 
-              
               muscin="$refname"$'\n'"$trs"$'\n'$(cat "$pd"/alignments/"$i"); #combine trimmed reference fragment
+              echo "$muscin" > "$pd"/alignments/"$i"; #overwrite original file containing reads to align with new one that also contains the truncated reference sequence fragment
+
+              #final mapping with bwa
+              if [[ $dobwa == "YES" ]];
+              then
+                /share/apps/bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" 2>/dev/null | \
+                  /share/apps/samtools sort -O BAM --threads "$thr" 2>/dev/null | \
+                  /share/apps/samtools view -F 2048 -O BAM 2>/dev/null > "$pd"/alignments/"$ss"_aligned_haps.bam; #-F 2048 excludes supplementary alignments
+                /share/apps/samtools index "$pd"/alignments/"$ss"_aligned_haps.bam 2>/dev/null;
+              fi;
               
-              faTMP=$(/share/apps/muscle -quiet -in <(echo "$muscin")); #capture muscle fasta alignment output in a variable
-              
-              #put reference sequence at top of muscle output file and sort by read group
-              faTMP2=$(sed -e '/^>/s/$/@/' -e 's/^>/#>/' <<<"$faTMP" | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d'); #make output 1 line per sequence
-              lrs=$(grep ^"$refname" <<<"$faTMP2" | tr " " "\n"); #get the linearized reference sequence fragment, to add to top of muscle output
-              smuscout=$(grep -v ^"$refname" <<<"$faTMP2"| sort -t'_' -k4,4 | tr " " "\n"); #sort muscle aligned haplotypes, to add to revised muscle output
-              echo "$lrs"$'\n'"$smuscout" >  "$pd"/alignments/"$ss"_aligned_haps.fa
+#              #final multiple alignment with muscle, include a fragment of the reference contig overlapping the haplotypes
+#              #add reference sequence to the multi fasta of processed haplotypes
+##              flankingl=30; #number of bp to extract on each side of the theoretical max and min boundaries of the haplotypes aligned to the reference
+#              longesth=$(grep -v ^'>' "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1); #find the longest haplotype
+#              reflength=$(tail -1 "$pd"/"$rr"_ref.txt | awk '{print length}');
+#              le=$(( $(cut -d'-' -f1 <<<"$tt") - $longesth - $flankingl )); #determine the left end of the subsequence to extract from the reference contig
+#              if (( $le < 0 )); then le=1; fi; #no negative positions allowed
+#              re=$(( $(cut -d'-' -f2 <<<"$tt") + $longesth + $flankingl )); #determine the right end of the subsequence to extract from the reference contig
+#              if (( $re > $reflength )); then re=$reflength; fi; #cannot exceed the right end of the reference or you will get an error when you try to extract the 30 bp on each end elongated fragment
+#              
+#              refname=$(head -1 "$pd"/"$rr"_ref.txt | sed 's/$/_'$le'_'$re'/'); #name for reference sequence fragment to be included in muscle alignment
+#              trs=$(grep -v ^'>' "$pd"/"$rr"_ref.txt | tr -d '\n' | cut -c"$le"-"$re"); #add the trimmed reference subsequence to the fasta files for muscle alignment 
+#              
+#              muscin="$refname"$'\n'"$trs"$'\n'$(cat "$pd"/alignments/"$i"); #combine trimmed reference fragment
+#              
+#              faTMP=$(/share/apps/muscle -quiet -in <(echo "$muscin")); #capture muscle fasta alignment output in a variable
+             
+              #final multiple alignment with muscle
+              if [[ $dobwa == "YES" ]];
+              then
+                faTMP=$(/share/apps/muscle -quiet -in "$pd"/alignments/"$i"); #capture muscle fasta alignment output in a variable
+
+                #put reference sequence at top of muscle output file and sort by read group
+                faTMP2=$(sed -e '/^>/s/$/@/' -e 's/^>/#>/' <<<"$faTMP" | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d'); #make output 1 line per sequence
+                lrs=$(grep ^"$refname" <<<"$faTMP2" | tr " " "\n"); #get the linearized reference sequence fragment, to add to top of muscle output
+                smuscout=$(grep -v ^"$refname" <<<"$faTMP2"| sort -t'_' -k4,4 | tr " " "\n"); #sort muscle aligned haplotypes, to add to revised muscle output
+                echo "$lrs"$'\n'"$smuscout" >  "$pd"/alignments/"$ss"_aligned_haps.fa;
+              fi;
 }
 export -f myalignhaps;
 
@@ -518,6 +542,8 @@ stq=60; #samtools view -q option
 maxp=1000; #max number of NNNNs used as padding between proper read pairs, implicitly sets an upper limit on insert size
 dodedup=NO; #by default do not remove duplicate (sub)sequences
 doalign=NO; #by default do not produce final alignments of extracted haploblocks to their reference
+domuscle=NO; #by default do not perform a final muscle alignment of qualified haploblocks
+dobwa=NO; #by default do not perform a final bwa mem map of qualified haploblocks
 nooutput=NO; #by default do not suppress printing of all output files except the log
 
 #acquire command line variables
@@ -576,8 +602,14 @@ case $key in
     dodedup=YES
     shift # past argument
     ;;
-    -m)
+    -mm)
     doalign=YES
+    domuscle=YES
+    shift # past argument
+    ;;
+    -mb)
+    doalign=YES
+    dobwa=YES
     shift # past argument
     ;;
     -x)
@@ -620,6 +652,8 @@ export stq;
 export maxp;
 export rgf;
 export bam;
+export domuscle;
+export dobwa;
 
 #log
 log="$outfol"/log.txt;
@@ -710,7 +744,7 @@ echo "Reconstructing haploblocks:";
 if [[ $doalign == "YES" ]];
 then
   echo "Final mapping and alignment:"
-  find "$pd"/alignments -name "*.global.fa"  | rev | cut -d'/' -f1 | rev | parallel --bar --sshloginfile /home/reevesp/machines --env pd --env myalignhaps myalignhaps;
+  find "$pd"/alignments -name "*.global.fa"  | rev | cut -d'/' -f1 | rev | parallel --bar --sshloginfile /home/reevesp/machines --env pd --env domuscle --env dobwa --env myalignhaps myalignhaps;
 fi;
 
 #clean up
