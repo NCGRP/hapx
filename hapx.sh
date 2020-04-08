@@ -237,6 +237,7 @@ mycon1() {
 
        #extract read pairs at target sites using samtools. Obey include, exclude and quality rules from command line
        tmpf=$(/share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" "$bam" "$site" | sort); #get read pairs mapped to contig:site-range in original bwa or gem alignment
+       if [[ "$debug" == "YES" ]]; then echo "$tmpf" > "$pd"/"$site".tmpf; fi;
        
        #count number of read pairs and single ends that have met the samtools -f/-F/-q rules
        if [[ "$tmpf" == "" ]]; then return;
@@ -341,6 +342,8 @@ mycon1() {
          
        #remove terminal line break in major output variable $mfa
        mfa=$(sed '/^$/d' <<< "$mfa");
+       if [[ "$debug" == "YES" ]]; then echo "$mfa" > "$pd"/"$site".mfa; fi;
+
        if [[ "$mfa" == "" ]]; then return; #skip out of this contig:site-range, there is no qualified data
        fi;
 
@@ -383,7 +386,7 @@ mycon1() {
          else
            fonfa=$(grep -v -F -f <(echo "$rem") <(echo "$fonlmfa") | sort); #remove all lines that contain sequences that are subsequences of other lines
          fi;
-       
+         
          #count identical sequences and subsequences removed
          ts1=$(wc -l <<<"$fonmfa"); #number of sequences at start
          ts2=$(wc -l <<<"$fonlmfa"); #number of sequences after removing identical
@@ -393,7 +396,7 @@ mycon1() {
 
 
 
-###report counts to parallel statement for log.txt###
+###accumulate counts to report to parallel statement for log.txt###
 basicstats+=$(echo "#""$inf"."$fon"$'\t'"$ts1":"$ni":"$ns":"$ts3")$'\n'; 
 ###                                               ###
 
@@ -416,7 +419,7 @@ basicstats+=$(echo "#""$inf"."$fon"$'\t'"$ts1":"$ni":"$ns":"$ts3")$'\n';
        allhash=$(sed '/^$/d' <<< "$allhash"); #remove empty line at end
 
 
-###report counts to parallel statement for log.txt###
+###report accumulated counts to parallel statement for log.txt###
 echo "$basicstats" | sed '/^$/d';
 
 
@@ -545,6 +548,7 @@ doalign=NO; #by default do not produce final alignments of extracted haploblocks
 domuscle=NO; #by default do not perform a final muscle alignment of qualified haploblocks
 dobwa=NO; #by default do not perform a final bwa mem map of qualified haploblocks
 nooutput=NO; #by default do not suppress printing of all output files except the log
+debug=NO; #turn debugging off, do not save internal data structures as files
 
 #acquire command line variables
 POSITIONAL=()
@@ -616,6 +620,10 @@ case $key in
     nooutput=YES
     shift # past argument
     ;;
+    -db)
+    debug=YES
+    shift # past argument
+    ;;
     *)    # unknown option
     POSITIONAL+=("$1") # save it in an array for later
     shift # past argument
@@ -654,6 +662,7 @@ export rgf;
 export bam;
 export domuscle;
 export dobwa;
+export debug;
 
 #log
 log="$outfol"/log.txt;
@@ -698,7 +707,7 @@ echo "Site.Readgroup"$'\t'"NumHblocks:NumIdenticalHblocks:NumIdenticalHblockSubs
 echo "Reconstructing haploblocks:";
 
 (echo "$e" | parallel --bar --sshloginfile /home/reevesp/machines \
-       --env pd --env dodedup --env nooutput --env maxp --env rgf --env stf --env stF --env stq --env bam \
+       --env pd --env dodedup --env nooutput --env maxp --env rgf --env stf --env stF --env stq --env bam --env debug \
        --env mycon1 --env myiupac --env myinsertion --env myconseq --env mycountqualreadpairs \
        mycon1) >> "$log";
 
@@ -748,7 +757,10 @@ then
 fi;
 
 #clean up
-rm "$pd"/*_ref.txt*;
+if [[ $debug == "NO" ]];
+then rm "$pd"/*_ref.txt*;
+fi;
+
 date >> "$log";
 
   
