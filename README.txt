@@ -15,7 +15,7 @@ Usage: hapx -r ref -b bam -o out -a alnr [-f inc] [-F exc] [-q qual] [-p maxp] [
 where,
 ref = path to reference genome sequence in multi-fasta format [required]
 bam = path to bam file of reads aligned to ref [required]
-out = name of directory for output files
+out = name of directory for output files, not a path, will be created in current directory
 sites = path to file containing genomic positions to use [required]
      Provide a line delimited list of the form:
          jcf7180008454378:303-304
@@ -28,11 +28,11 @@ exc = integer flag value for Samtools view -F option (properties of reads to exc
 qual = Samtools view -q option (minimum mapping quality of included reads) [default=60]
 maxp = allow no more than maxp Ns between read pairs. This prevents read pairs from being assembled into an NNN-padded haploblock when they are too far apart.  You may want to set -p maxp according to average library insert size [default 1000];
 
--d = delete duplicate sequences and subsequences from output
+-d = delete non-unique haploblocks from output (keep 1 from a set of identical haploblocks, keep the longer haploblock when there are exact match subsequences)
 -mm = align (muscle) extracted haploblocks
 -mb = map (bwa mem) extracted haploblocks
--x = do not write any output files except log (makes -d and -m irrelevant)
--db = debugging mode, save internal data structures as files
+-x = do not write any output files except log (makes -d and -m[mb] irrelevant)
+-db = debugging mode, save some internal data structures as files (be careful, this can produce a lot of files)
 
 Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta /share/space/reevesp/patellifolia/xtr/AllP.merged.bam bwamem jcf7180008454378:303-304,jcf7180008531951:103-495,jcf7180008395354:294-295,jcf7180008827236:1031-1032,jcf7180008378511:277-278,jcf7180008637475:7-8,jcf7180008587925:106-107,jcf7180008527965:177-178,jcf7180008578969:84-85,jcf7180008484650:470-471,jcf7180008856767:98710-98886;
 
@@ -42,7 +42,7 @@ Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.f
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -a gem -d -s jcf7180008454378:204-304,jcf7180008531951:395-495,jcf7180008395354:195-295,jcf7180008827236:932-1032,jcf7180008378511:178-278,jcf7180008637475:7-107,jcf7180008587925:7-107,jcf7180008527965:78-178,jcf7180008578969:84-184,jcf7180008484650:371-471,jcf7180008856767:98710-98810;
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o s1 -a gem -d -m -s sites.txt;
 
-#use a function to generate target sites (effectively a sliding window)
+#use a function to generate target sites (effectively a sliding window), set range to average library insert size, step to 1
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 1305 -a gem -m -s <(for i in $(seq 1 1 305); do echo jcf7180008587925:"$i"-$(( $i + 1 )); done;);
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 25544 -a gem -m -s <(for i in $(seq 1 25 544); do echo jcf7180008531951:"$i"-$(( $i + 25 )); done;)
 ./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500 -a gem -m -s <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)

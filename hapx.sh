@@ -270,20 +270,12 @@ mycon1() {
            #above, the first sed searches from 0 to the pattern then performs substitution 1 on the fastq defline, which causes the insertion of whitespace.  The second sed then searches the whole file and performs substitution 2 on the second fastq defline. \S means 'not whitespace'
            #above, create single files containing both reads of a read pair
 
-           #one pipe. faster than two pipes
            #myrealign takes the reads extracted from the primary alignment ($rpfq) and realigns them independently to the contig as reference
            #mapping quality changes upon realignment, extract only reads with user defined properties (/share/apps/samtools view -fFq), convert those to proper fastq file and re-align again
            t=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$rpfq") 2>/dev/null | \
                /share/apps/samtools sort -O SAM 2>/dev/null | \
                /share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" 2>/dev/null | \
                awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
-
-#two pipes version
-#           #myrealign takes the reads extracted from the primary alignment ($rpfq) and realigns them independently to the contig as reference
-#           sbm=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$rpfq") 2>/dev/null | /share/apps/samtools sort -O SAM 2>/dev/null); #capture human readable sam file in a variable, it's small since only involved 2 reads and a reference (-p paired interleaved, -M label split reads as secondary so samtools mpileup excludes them)
-# 
-#           #mapping quality changes upon realignment, extract only reads with user defined properties (/share/apps/samtools view -fFq), convert those to proper fastq file and re-align again
-#           t=$(/share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" <(echo "$sbm") 2>/dev/null | awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
 
            if [[ $(echo "$t") != "" ]]; #only re-realign if there are reads left after latest quality filter
            then x2xsam=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$t") 2>/dev/null | awk -F$'\t' '$3!="*"{print $0}'); #perform second realignment and manually remove any unmapped reads that may have been found
@@ -451,8 +443,10 @@ echo "$reportctsfreqs" | sed '/^$/d'; #report to parallel statement
 
 
 
-       #remake the global output file, with nothing removed, if -d option not selected. Otherwise, when $dodedup == "YES" (-d switch on), make the global output file with identical (sub)sequences removed
-       #only do any of this if the user has agreed to print output
+       #remake the global output file (this is the one for the final alignment, if -mm or -mb)
+       #with nothing removed, if -d option not selected. Otherwise, when $dodedup == "YES" (-d switch on),
+       #make the global output file with identical (sub)sequences removed
+       #only do any of this if the user has agreed to print output (no -x option)
        if [[ "$nooutput" == "NO" ]] && [[ "$dodedup" == "NO" ]]; 
        then sed -e '/^>/s/$/@/' -e 's/^>/#/' <(echo "$mfa") | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}' | tr " " "\n" > "$pd"/alignments/"$inf".global.fa; #produce undeduped output for alignment
        elif [[ "$nooutput" == "NO" ]] && [[ "$dodedup" == "YES" ]]
@@ -488,7 +482,7 @@ myalignhaps() {
               refname=$(head -1 "$pd"/"$rr"_ref.txt | sed 's/$/_'$le'_'$re'/'); #name for reference sequence fragment to be included in muscle alignment
               trs=$(grep -v ^'>' "$pd"/"$rr"_ref.txt | tr -d '\n' | cut -c"$le"-"$re"); #add the trimmed reference subsequence to the fasta files for muscle alignment 
               muscin="$refname"$'\n'"$trs"$'\n'$(cat "$pd"/alignments/"$i"); #combine trimmed reference fragment
-              echo "$muscin" > "$pd"/alignments/"$i"; #overwrite original file containing reads to align with new one that also contains the truncated reference sequence fragment
+              echo "$muscin" | tr ' ' '\n' > "$pd"/alignments/"$i"; #overwrite original file containing reads to align with new one that also contains the truncated reference sequence fragment
 
               #final mapping with bwa
               if [[ $dobwa == "YES" ]];
