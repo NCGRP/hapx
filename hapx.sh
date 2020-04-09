@@ -511,7 +511,7 @@ myalignhaps() {
 #              faTMP=$(/share/apps/muscle -quiet -in <(echo "$muscin")); #capture muscle fasta alignment output in a variable
              
               #final multiple alignment with muscle
-              if [[ $dobwa == "YES" ]];
+              if [[ $domuscle == "YES" ]];
               then
                 faTMP=$(/share/apps/muscle -quiet -in "$pd"/alignments/"$i"); #capture muscle fasta alignment output in a variable
 
