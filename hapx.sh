@@ -240,7 +240,9 @@ mycon1() {
        if [[ "$debug" == "YES" ]]; then echo "$tmpf1" > "$pd"/"$site".tmpf1; fi;
        
        #reads extracted above must contain -both- pairs within the range $site. This is undesirable, for example
-       #if the site range is 1bp, then reads from pair must overlap. Include pair of any read that falls within
+       #if the site range is 1bp, then reads from pair must overlap in order to recover both.
+       #With stf=1, you can recover a single read that exists as a mapped pair, but where both reads don't map to the site-range.
+       #From the current contig, include pair of any read that -exists as a mapped pair- (stf=1) and that falls within
        #the site range.  These pairs may be eliminated anyway in later steps that realign and filter by quality,
        #but they should not be excluded by virtue of non-overlap with the targeted site range
        
@@ -692,7 +694,11 @@ echo >> "$log";
 #create new reference sequences
 #extract each contig listed in $sites from the reference genome to be used by itself as a reference for realignment with the extracted read pairs, then bwa index
 echo "Isolating contigs:"; #this step is fast
-echo "$e" | cut -d: -f1 | sort -u | parallel --bar 'sed -n -e "/^>{}$/,/>/p" '"$ref"' | sed "$ d" > '"$pd/"'{}_ref.txt'; #sed extracts lines from name of contig of interest until next contig name line, second sed deletes the last line
+#below modify the reference genome to have a '>' as the last line before extracting contig with sed.
+#This a hack to take care of the case where the contig of interest is the last one in the reference
+echo "$e" | cut -d: -f1 | sort -u | parallel --bar 'sed -n -e "/^>{}$/,/>/p" '"<(cat "$ref" <(echo \>))"' | sed "$ d" > '"$pd/"'{}_ref.txt'; #sed extracts lines from name of contig of interest until next contig name line, second sed deletes the last line
+#echo "$e" | cut -d: -f1 | sort -u | parallel --bar 'sed -n -e "/^>{}$/,/>/p" '"$ref"' | sed "$ d" > '"$pd/"'{}_ref.txt'; #sed extracts lines from name of contig of interest until next contig name line, second sed deletes the last line
+
 echo "Indexing contigs:"; #this step should also be fast
 echo "$e" | cut -d: -f1 | sort -u | parallel --bar 'bwa index '"$pd/"'{}_ref.txt 2>/dev/null'; #index the isolated contigs
 
