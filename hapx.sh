@@ -232,14 +232,27 @@ export -f mycountqualreadpairs;
 #mycon1 combines old functions into one so that data can be passed in memory instead of using the disk
 mycon1() {
        site="$1"; #incoming data is a description of sites to process in contigname:site-range format like jcf7180008531951:276-301
-       
+       contigname=$(cut -d: -f1 <<< "$site");
 
 
        #extract read pairs at target sites using samtools. Obey include, exclude and quality rules from command line
-       tmpf=$(/share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" "$bam" "$site" | sort); #get read pairs mapped to contig:site-range in original bwa or gem alignment
-       if [[ "$debug" == "YES" ]]; then echo "$tmpf" > "$pd"/"$site".tmpf; fi;
+       tmpf1=$(/share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" "$bam" "$site" | sort); #get read pairs mapped to contig:site-range in original bwa or gem alignment
+       if [[ "$debug" == "YES" ]]; then echo "$tmpf1" > "$pd"/"$site".tmpf1; fi;
        
+       #reads extracted above must contain -both- pairs within the range $site. This is undesirable, for example
+       #if the site range is 1bp, then reads from pair must overlap. Include pair of any read that falls within
+       #the site range.  These pairs may be eliminated anyway in later steps that realign and filter by quality,
+       #but they should not be excluded by virtue of non-overlap with the targeted site range
+       
+       #htmpf=$(grep ^'@' <<< "$tmpf1"); #sam header from $tmpf1
+       unptmpf=$(cut -d$'\t' -f1 <<< "$tmpf1" | sort -u); #acquire list of all reads that map to the site-range, includes paired and unpaired
+       btmpf=$(/share/apps/samtools view "$bam" "$contigname"); #get all reads associated with contig
+       tmpf=$(LC_ALL=C grep -w -F -f <(echo "$unptmpf") <<< "$btmpf"); #get read pairs, any one of which mapped to site-range
+
+       if [[ "$debug" == "YES" ]]; then echo "$tmpf" > "$pd"/"$site".tmpf; fi;
+
        #count number of read pairs and single ends that have met the samtools -f/-F/-q rules
+       #there will only be single ends if the pair doesn't map to the contig
        if [[ "$tmpf" == "" ]]; then return;
        else f=$(mycountqualreadpairs);
        fi;
