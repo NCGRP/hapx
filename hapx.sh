@@ -694,7 +694,7 @@ echo >> "$log";
 #create new reference sequences
 #extract each contig listed in $sites from the reference genome to be used by itself as a reference for realignment with the extracted read pairs, then bwa index
 echo "Isolating contigs:"; #this step is fast
-#below modify the reference genome to have a '>' as the last line before extracting contig with sed.
+#Below modify the reference genome to have a '>' as the last line before extracting contig with sed.
 #This a hack to take care of the case where the contig of interest is the last one in the reference
 echo "$e" | cut -d: -f1 | sort -u | parallel --bar 'sed -n -e "/^>{}$/,/>/p" '"<(cat "$ref" <(echo \>))"' | sed "$ d" > '"$pd/"'{}_ref.txt'; #sed extracts lines from name of contig of interest until next contig name line, second sed deletes the last line
 #echo "$e" | cut -d: -f1 | sort -u | parallel --bar 'sed -n -e "/^>{}$/,/>/p" '"$ref"' | sed "$ d" > '"$pd/"'{}_ref.txt'; #sed extracts lines from name of contig of interest until next contig name line, second sed deletes the last line
