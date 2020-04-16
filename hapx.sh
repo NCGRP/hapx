@@ -234,7 +234,6 @@ mycon1() {
        site="$1"; #incoming data is a description of sites to process in contigname:site-range format like jcf7180008531951:276-301
        contigname=$(cut -d: -f1 <<< "$site");
 
-
        #extract read pairs at target sites using samtools. Obey include, exclude and quality rules from command line
        tmpf1=$(/share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" "$bam" "$site" | sort); #get read pairs mapped to contig:site-range in original bwa or gem alignment
        if [[ "$debug" == "YES" ]]; then echo "$tmpf1" > "$pd"/"$site".tmpf1; fi;
@@ -287,6 +286,7 @@ mycon1() {
 
            #myrealign takes the reads extracted from the primary alignment ($rpfq) and realigns them independently to the contig as reference
            #mapping quality changes upon realignment, extract only reads with user defined properties (/share/apps/samtools view -fFq), convert those to proper fastq file and re-align again
+           #-p, paired-end mode assumes read pairs are consecutive; -M mark split hits as secondary alignments (so they can be ignored in samtools view -F step)
            t=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$rpfq") 2>/dev/null | \
                /share/apps/samtools sort -O SAM 2>/dev/null | \
                /share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" 2>/dev/null | \
@@ -546,7 +546,6 @@ export -f myalignhaps;
 #define variables and establish defaults
 #ref, path to the reference genome sequence in multi-fasta format
 #bam, path to the bam file containing the alignment of reads to ref
-#alnr, aligner used to create bam file (gem, bwamem)
 #sites, genomic regions to use
 stf=1; #samtools view -f option
 stF=3852; #samtools view -F option, see https://broadinstitute.github.io/picard/explain-flags.html
@@ -578,11 +577,6 @@ case $key in
     ;;
     -o)
     outfol="$2"
-    shift # past argument
-    shift # past value
-    ;;
-    -a)
-    alnr="$2"
     shift # past argument
     shift # past value
     ;;
@@ -643,14 +637,17 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 
 
 #process command line parameters
-if [[ "$alnr" == "gem" ]];
-then rgf=12; #read group info in field 12 for gem bam output
-elif [[ "$alnr" == "bwamem" ]];
-then rgf=17; #read group info in field 17 for bwamem bam output
-else echo "Unrecognized aligner: $alnr.  Quitting...";
-  return;
-  exit;
-fi;
+#if [[ "$alnr" == "gem" ]];
+#then rgf=12; #read group info in field 12 for gem bam output
+#elif [[ "$alnr" == "bwamem" ]];
+#then rgf=17; #read group info in field 17 for bwamem bam output
+#else echo "Unrecognized aligner: $alnr.  Quitting...";
+#  return;
+#  exit;
+#fi;
+#
+#determine column number containing read group field
+rgf=$(samtools view "$bam" | head -1 | tr "\t" "\n" | sed -n '/RG:Z/=');
 
 #suppress doalign option if -x nooutput option is selected
 if [[ "$nooutput" == "YES" ]];
@@ -679,7 +676,6 @@ date > "$log";
 echo >> "$log";
 echo "Executable: $0" >> "$log";
 echo "Reference sequence: $ref" >> "$log";
-echo "Alignment software: $alnr" >> "$log";
 echo "Alignment file (bam): $bam" >> "$log";
 echo "Target sites: $sites" >> "$log";
 echo "samtools view -f $stf" >> "$log";
