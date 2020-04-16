@@ -252,6 +252,12 @@ mycon1() {
 
        if [[ "$debug" == "YES" ]]; then echo "$tmpf" > "$pd"/"$site".tmpf; fi;
 
+       #bwa mem, used later, does not use Illumina quality scores for mapping (per Heng Li:https://sourceforge.net/p/bio-bwa/mailman/message/34410817/)
+       #bwa mem will not align a fastq sequence if the quality scores are missing (col11 = "*"), so
+       #spoof them here, substituting the * in column 11 with column 10 sequence, then converting sequence
+       #in column 11 to all JJJs (Q=41), just to get bwa mem to work
+       tmpf=$(awk -F$'\t' '{OFS="\t"};$11=="*"{$11=$10;gsub(/./,"J",$11)};{print $0}' <<<"$tmpf"); #list of lengths of sequences 2 lines before asterisks
+       
        #count number of read pairs and single ends that have met the samtools -f/-F/-q rules
        #there will only be single ends if the pair doesn't map to the contig
        if [[ "$tmpf" == "" ]]; then return;
@@ -283,7 +289,7 @@ mycon1() {
          do rpfq=$(grep -A3 "$j" <(echo "$s") | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/'); #save read pair into a variable containing a reconstructed fastq, labeled as a read pair for bwa
            #above, the first sed searches from 0 to the pattern then performs substitution 1 on the fastq defline, which causes the insertion of whitespace.  The second sed then searches the whole file and performs substitution 2 on the second fastq defline. \S means 'not whitespace'
            #above, create single files containing both reads of a read pair
-
+           
            #myrealign takes the reads extracted from the primary alignment ($rpfq) and realigns them independently to the contig as reference
            #mapping quality changes upon realignment, extract only reads with user defined properties (/share/apps/samtools view -fFq), convert those to proper fastq file and re-align again
            #-p, paired-end mode assumes read pairs are consecutive; -M mark split hits as secondary alignments (so they can be ignored in samtools view -F step)
