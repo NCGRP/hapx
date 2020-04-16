@@ -250,14 +250,14 @@ mycon1() {
        btmpf=$(/share/apps/samtools view "$bam" "$contigname"); #get all reads associated with contig
        tmpf=$(LC_ALL=C grep -w -F -f <(echo "$unptmpf") <<< "$btmpf"); #get read pairs, any one of which mapped to site-range
 
-       if [[ "$debug" == "YES" ]]; then echo "$tmpf" > "$pd"/"$site".tmpf; fi;
-
        #bwa mem, used later, does not use Illumina quality scores for mapping (per Heng Li:https://sourceforge.net/p/bio-bwa/mailman/message/34410817/)
        #bwa mem will not align a fastq sequence if the quality scores are missing (col11 = "*"), so
        #spoof them here, substituting the * in column 11 with column 10 sequence, then converting sequence
        #in column 11 to all JJJs (Q=41), just to get bwa mem to work
        tmpf=$(awk -F$'\t' '{OFS="\t"};$11=="*"{$11=$10;gsub(/./,"J",$11)};{print $0}' <<<"$tmpf"); #list of lengths of sequences 2 lines before asterisks
        
+       if [[ "$debug" == "YES" ]]; then echo "$tmpf" > "$pd"/"$site".tmpf; fi;
+
        #count number of read pairs and single ends that have met the samtools -f/-F/-q rules
        #there will only be single ends if the pair doesn't map to the contig
        if [[ "$tmpf" == "" ]]; then return;
