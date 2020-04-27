@@ -484,7 +484,7 @@ echo "$reportctsfreqs" | sed '/^$/d'; #report to parallel statement
 export -f mycon1;
 
 myalignhaps() {
-              i=$1;
+              i=$1; #i is structured like jcf7180008848314_28717-32294.global.fa
               thr=$(lscpu | grep "^CPU(s):" | awk '{print $2}'); #max threads
               rr=$(cut -d'_' -f1 <<<"$i"); #reference contig name, e.g. jcf7180008454378
               ss=$(cut -d'.' -f1 <<<"$i"); #refcontig+siterange, e.g. jcf7180008454378_303-304
@@ -494,7 +494,8 @@ myalignhaps() {
               #add reference sequence to the multi fasta of processed haplotypes
               flankingl=30; #number of bp to extract on each side of the theoretical max and min boundaries of the haplotypes aligned to the reference
               longesth=$(grep -v ^'>' "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1); #find the longest haplotype
-              reflength=$(tail -1 "$pd"/"$rr"_ref.txt | awk '{print length}');
+              #reflength=$(tail -1 "$pd"/"$rr"_ref.txt | awk '{print length}');
+              reflength=$(tail -n +2 "$pd"/"$rr"_ref.txt | tr -d '\n' | awk '{print length}');
               le=$(( $(cut -d'-' -f1 <<<"$tt") - $longesth - $flankingl )); #determine the left end of the subsequence to extract from the reference contig
               if (( $le < 0 )); then le=1; fi; #no negative positions allowed
               re=$(( $(cut -d'-' -f2 <<<"$tt") + $longesth + $flankingl )); #determine the right end of the subsequence to extract from the reference contig
