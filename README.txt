@@ -18,10 +18,9 @@ bam = path to bam file of reads aligned to ref [required]
 out = name of directory for output files, not a path, will be created in current directory
 sites = path to file containing genomic positions to use [required]
      Provide a line delimited list of the form:
-         jcf7180008454378:303-304
+         jcf7180008454378:303-303
          jcf7180008531951:103-495
-     which specifies bp 303-304 of the contig named "jcf7180008454378" and bps 103-495 of contig "jcf7180008531951".
-     Samtools view will not allow you to specify a single nucleotide position, so just use a 2bp range in that case.
+     which specifies bp 303 of the contig named "jcf7180008454378" and bps 103-495 of contig "jcf7180008531951".
 inc = integer flag value for Samtools view -f option (properties of reads to include), see https://broadinstitute.github.io/picard/explain-flags.html [default=1, include paired reads. Avoid including proper pairs, bwa mem requires many reads to calculate a distribution from which "proper pairs" are determined. In hapx, individual read pairs are aligned to their contig, thus no such distribution can be calculated and bwa mem will not return any proper pairs]
 exc = integer flag value for Samtools view -F option (properties of reads to exclude) [default=3852, exclude unmapped reads && reads whose mate or pair is unmapped && not primary alignment && read fails platform/vendor quality checks && read is PCR or optical duplicate && supplementary alignment]
 qual = Samtools view -q option (minimum mapping quality of included reads) [default=60]
@@ -174,12 +173,18 @@ for i in $b;
   done;
 
 #consolidate files into 1
+#you can tailor the columns cut depending on the number of read groups included, or just use Locus 1
+#for <= 5 read groups, it turns out the same
 #Locus1
 paste -d$'\t' global.distallel.txt RG_Z_*.distallel.txt global.totallel.txt RG_Z_*.totallel.txt global.privallel.txt RG_Z_*.privallel.txt \
   | cut -d$'\t' -f1,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42 | sed 's/\.global//'> summary.txt;
 #Locus2 (above produces identical result with L2 as below)
 paste -d$'\t' global.distallel.txt RG_Z_*.distallel.txt global.totallel.txt RG_Z_*.totallel.txt global.privallel.txt RG_Z_*.privallel.txt \
   | cut -d$'\t' -f1,2,4,6,8,10,12,14,16,18,20,22,24 | sed 's/\.global//'> summary.txt;
+#ORF803
+paste -d$'\t' global.distallel.txt RG_Z_*.distallel.txt global.totallel.txt RG_Z_*.totallel.txt global.privallel.txt RG_Z_*.privallel.txt \
+  | cut -d$'\t' -f1,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36 | sed 's/\.global//'> summary.txt;
+
 
 #scale by total read count
 			L1
@@ -207,15 +212,29 @@ paste -d$'\t' global.distallel.txt RG_Z_*.distallel.txt global.totallel.txt RG_Z
 			$7..$9=$6
 			$11..$13=$10
 			
+			ORF803
+			pool:cols:scalar
+			50:3,9,15:1.71
+			51:4,10,16:1.00
+			53:5,11,17:1.83
+			54:6,12,18:1.18
+			55:7,13,19:1.20
+			global cols
+			2,8,14
+			$3..$7=$2    #distallel
+			$9..$13=$8    #totallel
+			$15..$19=$14 #privallel
+			
 
 summ=$(tail -n +2 summary.txt | tr "\t" " "); #acquire summary.txt as a variable
 h=$(head -1 summary.txt);
 #adjust values for each read group, choose 'for' line according to locus 1 or locus 2
 l1="50:3,10,17:1.71 51:4,11,18:1.00 52:5,12,19:1.23 53:6,13,20:1.83 54:7,14,21:1.18 55:8,15,22:1.20";
 l2="50:3,7,11:1.71 51:4,8,12:1.00 52:5,9,13:1.23";
-for i in $l2;
+orf803="50:3,9,15:1.71 51:4,10,16:1.00 53:5,11,17:1.83 54:6,12,18:1.18 55:7,13,19:1.20";
+for i in $orf803;
   do echo "$i";
-    p=$(echo "$i" | cut -d: -f1); #pool name
+    #p=$(echo "$i" | cut -d: -f1); #pool name
     c=$(echo "$i" | cut -d: -f2); #columns to scale
     s=$(echo "$i" | cut -d: -f3); #scalar, divide by this
     #cycle through list of columns to scale
@@ -227,7 +246,8 @@ for i in $l2;
 #adjust the so-called 'global' value, which is just the sum of the read group values
 l1global="2:3:8 9:10:15 16:17:22"; #columns to sum
 l2global="2:3:5 6:7:9 10:11:13"; #columns to sum
-for i in $l2global;
+orf803global="2:3:7 8:9:13 14:15:19";
+for i in $orf803global;
   do s=$(echo "$i" | cut -d: -f1); #column to put sum in
     st=$(echo "$i" | cut -d: -f2); #first column to sum
     se=$(echo "$i" | cut -d: -f3); #last column to sum
