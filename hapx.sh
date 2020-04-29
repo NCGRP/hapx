@@ -229,6 +229,69 @@ mycountqualreadpairs() {
 }
 export -f mycountqualreadpairs;
 
+#myparsecigar() returns the distance from the contig:site-range right end to the each mapped
+#paired read right end
+#myparsecigar() {
+#               j=$1; #pos:cigar like 11423:4M1D48M2D7M1D38M1D38M72S
+#               pos=$(cut -d: -f1 <<<"$j"); #position of first aligned base
+#               cig=$(cut -d: -f2 <<<"$j"); #cigar string
+#               cigops=$(sed 's/[0-9]*//g' <<<"$cig" | grep -o . | sort -u | tr -d '\n'); #gather all cigar string 'operators'
+#               if [[ "$cigops" == *"P"* ]];
+#               then echo "CIGAR string $cig contains invalid character P, skipping";
+#                 return; #skip the current contig:site-range
+#               else sed 's:\([DIMSX=]\):\1\n:g' <<<"$cig" | sed '/^$/d' | grep -v "I" | sed 's/[DIMSX=]//' | awk '{s+=$1}END{print s}';
+#               fi;
+#}
+#export -f myparsecigar;
+#
+#mygetends() calculates the range of bases associated with the site range as a microhaplotype
+#this amounts to the sequence span that is alignable across (i.e. "common to") all paired read
+#haplotypes extending left and right from the site range
+#called like: 
+#mhends=$( (for i in $(seq 11423 1 11500); do echo 51jcf7180007742276:"$i"-"$i"; done;) \
+#  | parallel --sshloginfile /home/reevesp/machines --env stq --env bam --env mygetends mygetends );
+#mhends=$(sort -t'-' -k1,1n <<<"$mhends");
+mygetends() {
+              i=$1; #contig:site-range
+              lesr=$(cut -d: -f2 <<<"$i" | cut -d'-' -f1); #left end site range
+              resr=$(cut -d: -f2 <<<"$i" | cut -d'-' -f2); #right end site range
+              
+              #f=$(samtools view -q 1 Hs1pro1l1.finalaln.bam 51jcf7180007742276:"$i"-"$i" | cut -d$'\t' -f4 | sort -nr | head -1);
+              
+              #get LE and cigar string for each sequence
+              g=$(/share/apps/samtools view -q "$stq" "$bam" "$i" | cut -d$'\t' -f4,6);
+              if [[ "$g" == "" ]]; then return; fi; #bail out if there are no aligned reads at the position
+              
+              #calculate closest ends to left side of site range
+              le=$(cut -d$'\t' -f1 <<<"$g" | sort -nr | head -1); #position of left read pair end nearest to left end of site range
+              led=$(( $lesr - $le )); #distance to closest LE
+              
+              #parse cigar string for right end positions
+              #allres=$(echo "$g" | tr '\t' ':' | parallel --env myparsecigar myparsecigar); #variable to hold all right end positions
+              allres="";
+              for j in $(echo "$g" | tr '\t' ':' | tr '\n' ' ');
+                do pos=$(cut -d: -f1 <<<"$j"); #position of first aligned base
+                  cig=$(cut -d: -f2 <<<"$j"); #cigar string
+                  cigops=$(sed 's/[0-9]*//g' <<<"$cig" | grep -o . | sort -u | tr -d '\n'); #gather all cigar string 'operators'
+                  if [[ "$cigops" == *"P"* ]];
+                  then echo "CIGAR string $cig contains invalid character P, skipping";
+                    return; #skip the current contig:site-range
+                  else allres+=$(sed 's:\([DIMSX=]\):\1\n:g' <<<"$cig" | sed '/^$/d' | grep -v "I" | sed 's/[DIMSX=]//' | awk '{s+=$1}END{print s}');
+                    allres+=$'\n';
+                  fi;
+                done;
+              allres=$(sed '/^$/d' <<<"$allres"); #remove trailing blank line
+              
+              #calculate closest ends to right side of site range
+              red=$(sort -n <<<"$allres" | head -1); #distance to closest RE
+              re=$(( $resr + $red )); #position of right read pair end nearest to right end of site range
+              
+              #report microhaplotype range to calling statement
+              echo "$lesr-$resr $le-$re "$(( $re - $le ));
+}
+export -f mygetends;
+
+
 #mycon1 combines old functions into one so that data can be passed in memory instead of using the disk
 mycon1() {
        site="$1"; #incoming data is a description of sites to process in contigname:site-range format like jcf7180008531951:276-301
