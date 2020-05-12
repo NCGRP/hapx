@@ -259,7 +259,7 @@ mygetends() {
               #f=$(samtools view -q 1 Hs1pro1l1.finalaln.bam 51jcf7180007742276:"$i"-"$i" | cut -d$'\t' -f4 | sort -nr | head -1);
               
               #get LE and cigar string for each sequence
-              g=$(/share/apps/samtools view -q "$stq" "$bam" "$i" | cut -d$'\t' -f4,6);
+              g=$(/share/apps/samtools view -F 2048 -q "$stq" "$bam" "$i" | cut -d$'\t' -f4,6); #-F 2048 excludes supplementary alignments
               if [[ "$g" == "" ]]; then return; fi; #bail out if there are no aligned reads at the position
               
               #calculate closest ends to left side of site range
@@ -270,26 +270,101 @@ mygetends() {
               #allres=$(echo "$g" | tr '\t' ':' | parallel --env myparsecigar myparsecigar); #variable to hold all right end positions
               allres="";
               for j in $(echo "$g" | tr '\t' ':' | tr '\n' ' ');
-                do pos=$(cut -d: -f1 <<<"$j"); #position of first aligned base
+                do lpos=$(cut -d: -f1 <<<"$j"); #position of first aligned base
                   cig=$(cut -d: -f2 <<<"$j"); #cigar string
                   cigops=$(sed 's/[0-9]*//g' <<<"$cig" | grep -o . | sort -u | tr -d '\n'); #gather all cigar string 'operators'
+                  
+                  #process the cigar string. 1) split string on operations DIMSX=, 2) remove trailing blank line
+                  #3) remove any line with I (insertion) op, you are looking for the right end position relative to
+                  #the reference so insertions in the read are not counted, 4) remove DIMSX= characters, leaving the number
+                  #of base pairs for each op, 5) count all lines, each containing the number of base pairs per op,
+                  #6) subtract 1 because the cigar ops start on the lpos so that rpos is the last actual base of the 
+                  #read.
                   if [[ "$cigops" == *"P"* ]];
                   then echo "CIGAR string $cig contains invalid character P, skipping";
                     return; #skip the current contig:site-range
-                  else allres+=$(sed 's:\([DIMSX=]\):\1\n:g' <<<"$cig" | sed '/^$/d' | grep -v "I" | sed 's/[DIMSX=]//' | awk '{s+=$1}END{print s}');
-                    allres+=$'\n';
-                  fi;
+                  else lengthcig=$(sed 's:\([DIMSX=]\):\1\n:g' <<<"$cig" | sed '/^$/d' | grep -v "I" | sed 's/[DIMSX=]//' | awk '{s+=$1}END{print s}');
+                    rpos=$(( $lpos + $lengthcig - 1 )); #position of read pair right end
+                    allres+="$rpos"$'\n';
+                   fi;
                 done;
               allres=$(sed '/^$/d' <<<"$allres"); #remove trailing blank line
               
               #calculate closest ends to right side of site range
-              red=$(sort -n <<<"$allres" | head -1); #distance to closest RE
-              re=$(( $resr + $red )); #position of right read pair end nearest to right end of site range
+              #distance to all REs from RE of site range
+              
+              re=$(sort -n <<<"$allres" | head -1); #position of closest RE
+              red=$(( $re - $resr )); #distance to closest RE
               
               #report microhaplotype range to calling statement
-              echo "$lesr-$resr $le-$re "$(( $re - $le ));
+              echo "$lesr-$resr $le-$re "$(( $re - $le + 1 ));
 }
 export -f mygetends;
+
+#myevalmicrohaps() takes the accounting of microhaplotype spans from mygetends() and calculates
+#the number of alleles at each microhaplotype locus
+myevalmicrohaps() {
+
+
+}
+export -f myevalmicrohaps;
+
+
+
+YOU ARE HERE
+pd=$(pwd);
+ref=/share/space/reevesp/patellifolia/hapxtest/hapxsummary/51ref/51jcf7180007742276_ref.txt;
+bam=/share/space/reevesp/patellifolia/hapxtest/hapxsummary/bwamem/Hs1pro1l1.finalaln.bam;
+export bam ref;
+
+mhends=$( (for i in $(seq 11423 1 11500); do echo 51jcf7180007742276:"$i"-"$i"; done;) \
+  | parallel --sshloginfile /home/reevesp/machines --env stq --env bam --env mygetends mygetends );
+mhends=$(sort -t'-' -k1,1n <<<"$mhends");
+
+echo "$mhends" | parallel --sshloginfile /home/reevesp/machines --env bam --env myevalmicrohaps myevalmicrohaps;
+
+
+
+export COLUMNS=200; samtools tview -dT -p 51jcf7180007742276:11491 "$bam" | tail -n +4 | grep -v " " | sort | uniq -c;
+
+
+/share/apps/samtools view -F 2048 -q "$stq" -O BAM "$bam" "$i" 2>/dev/null > "$i".TMP.bam;
+samtools index "$i".TMP.bam 2>/dev/null;
+export COLUMNS=10; samtools tview -dT -p 51jcf7180007742276:11434 "$i".TMP.bam | tail -n +4;
+
+export COLUMNS=10; samtools tview -dT -p 51jcf7180007742276:11434 "$i".TMP.bam | tail -n +4 | sort | uniq -c;
+export COLUMNS=10; samtools tview -dT -p 51jcf7180007742276:11431 "$i".TMP.bam | tail -n +4 | sort | uniq -c;
+export COLUMNS=10; samtools tview -dT -p 51jcf7180007742276:11434 "$bam" | tail -n +4 | sort | uniq -c;
+export COLUMNS=10; samtools tview -dT -p 51jcf7180007742276:11431 "$bam" | tail -n +4 | sort | uniq -c;
+
+export COLUMNS=10; samtools tview -dT -p 51jcf7180007742276:11431 "$bam" | tail -n +4 | grep -v " " | sort | uniq -c;
+               ^length from $mhends                         ^le from $mhends
+export COLUMNS=200; samtools tview -dT -p 51jcf7180007742276:11491 "$bam" | tail -n +4 | grep -v " " | sort | uniq -c;
+
+
+i=51jcf7180007742276:11434-11434;
+ii=51jcf7180007742276:11433-11433;
+/share/apps/samtools view -F 2048 -q "$stq" "$bam" "$i" 2>/dev/null > "$i".TMP.sam;
+/share/apps/samtools view -F 2048 -q "$stq" "$bam" "$ii" 2>/dev/null > "$ii".TMP.sam;
+
+
+/share/apps/samtools view -q "$stq" -O BAM "$bam" "$i" 2>/dev/null | \
+  /share/apps/samtools fasta - 2>/dev/null | \
+  /share/apps/bwa mem "$ref" - 2>/dev/null | \
+  /share/apps/samtools sort -O BAM 2>/dev/null | \
+  /share/apps/samtools view -F 2048 -q "$stq" -O BAM - "$i" 2>/dev/null | 
+ This ^ not working. Trying to extract reads for le-re region, realign, then print microhaplotype with tview
+
+
+
+
+samtools tview -dT -p 51jcf7180007742276:11434 "$bam" | tail -n +3;
+samtools tview -dC -p 51jcf7180007742276:11434 "$i".TMP.bam | tail -n +4;
+
+export COLUMNS=10; samtools tview -dT --reference "$ref" -p 51jcf7180007742276:11434 "$bam" | less
+export COLUMNS=10; samtools tview -dT -p 51jcf7180007742276:11434 "$bam" | tail -n +3 | grep -v ^" " 
+
+
 
 
 #mycon1 combines old functions into one so that data can be passed in memory instead of using the disk
@@ -362,7 +437,9 @@ mycon1() {
                awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
 
            if [[ $(echo "$t") != "" ]]; #only re-realign if there are reads left after latest quality filter
-           then x2xsam=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$t") 2>/dev/null | awk -F$'\t' '$3!="*"{print $0}'); #perform second realignment and manually remove any unmapped reads that may have been found
+           then x2xsam=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$t") 2>/dev/null | awk -F$'\t' '$4!="*"{print $0}'); #perform second realignment and manually remove any unmapped reads that may have been found as indicated by a * in the position column $4
+             #x2xsam=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$t") 2>/dev/null | awk -F$'\t' '$3!="*"{print $0}'); #perform second realignment and manually remove any unmapped reads that may have been found (original statement, probably wrong vis a vis $3 vs $4)
+
            else continue; #no reads left to align, continue to next
            fi;
  
