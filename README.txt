@@ -172,7 +172,11 @@ for i in $b;
     mv "$i".2.privallel.txt "$i".privallel.txt;
   done;
 
-#consolidate files into 1
+
+
+
+
+#consolidate files into 1, this part depends on number of read groups, is not universal
 #you can tailor the columns cut depending on the number of read groups included, or just use Locus 1
 #for <= 5 read groups, it turns out the same
 #Locus1

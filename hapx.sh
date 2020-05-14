@@ -29,23 +29,6 @@ myiupac() {
           | sed 's/^T\*$/T/g' | sed 's/^\*T$/T/g');
           paste -d' ' <(echo "$a") <(echo "$b"); #recombine position numbers with consensus calls
 
-#orig
-#        read i; #input is a piped row of data
-#        a=$(echo "$i" | tr " " "\n" | cut -d$'\t' -f1); #get the position numbering
-#        b=$(echo "$i" | tr " " "\n" | cut -d$'\t' -f2 \
-#          | sed 's/^AA$/A/g' | sed 's/^CC$/C/g' | sed 's/^GG$/G/g' | sed 's/^TT$/T/g' \
-#          | sed 's/^AC$/M/g' | sed 's/^CA$/M/g' \
-#          | sed 's/^AG$/R/g' | sed 's/^GA$/R/g' \
-#          | sed 's/^AT$/W/g' | sed 's/^TA$/W/g' \
-#          | sed 's/^CG$/S/g' | sed 's/^GC$/S/g' \
-#          | sed 's/^CT$/Y/g' | sed 's/^TC$/Y/g' \
-#          | sed 's/^GT$/K/g' | sed 's/^TG$/K/g' \
-#          | sed 's/^\*$/x/g' | sed 's/^\**$/x/g' \
-#          | sed 's/^A\*$/A/g' | sed 's/^\*A$/A/g' \
-#          | sed 's/^C\*$/C/g' | sed 's/^\*C$/C/g' \
-#          | sed 's/^G\*$/G/g' | sed 's/^\*G$/G/g' \
-#          | sed 's/^T\*$/T/g' | sed 's/^\*T$/T/g');
-#          paste -d' ' <(echo "$a") <(echo "$b"); #recombine position numbers with consensus calls
 }
 export -f myiupac;
 
@@ -133,89 +116,6 @@ myinsertion() {
               #combine lines with insertions with those without, sort, print out without line breaks to be sent to myiupac in a pipe
               echo "$ij"$'\n'"$lwi" | sort -t$'\t' -k1,1n | tr "\n" " ";
 
-
-#orig
-#              read i;
-#              i=$(echo "$i" | tr ' ' '\n'); #delimit with line breaks
-#              j=$(echo "$i" | grep "+"); #collect all lines with insertions
-#              ij=$(echo "$i" | grep -v "+"); #collect all lines without insertions
-#
-#              #process lines with insertions ("$j"), save in a variable $lwi
-#              if [[ "$j" == "" ]];
-#              then lwi=""; #there are no insertions so create a dummy, empty variable
-#              else
-#                lwi=$(while read str;
-#                  do pos=$(echo "$str" | cut -d$'\t' -f1); #get the starting position of the insertion
-#                    m=$(echo "$str" | cut -d$'\t' -f2 | tr '+' '\n'); #break into lines on +
-#                    l1len=$(echo "$m" | head -1 | awk '{print length}'); #length of line one
-#                    nl=$(echo "$m" | wc -l); #number of lines
-#                    l2=$(echo "$m" | head -2 | tail -1); #get line 2 input
-#                    l2inslen=$(echo "$l2" | tr -d -c 0-9); #deletes all non-numeric characters from line 2 to read the length of the insertion
-#                    l2nchar=$(echo "$l2" | tr -d 0-9 | awk '{ print length }'); #number of chars in line 2, counts all non numeric characters
-#                    
-#                    if [[ $l1len == 1 ]]; #case where there in an insertion in the first read there is one character on line 1. here, you need to get character from first line plus last character of the second line, if present
-#                    then if [[ $nl == 2 ]];
-#                         then if [[ $l2nchar == $l2inslen ]]; #test whether there is a base from the second read hanging off the end of the insertion in line 2
-#                              then m=$(echo "$m" | sed '2s/$/\*/'); #add an asterisk to the end of the second line to act as the unknown read 2 base
-#                              fi;
-#                           l2=$(echo "$m" | head -2 | tail -1); #recalculate line 2 input now that it has been modified with an asterisk
-#                           n=$(paste -d' ' <(echo "$m" | head -1) <(echo "$l2" | rev | cut -c1) | sed 's/ //'); #char states composed of line 1 + last character of line 2
-#                           for i in $(seq 1 1 $l2inslen);
-#                             do n=$(echo "$n";echo "$l2" | tr -d 0-9 | cut -c$i)"*"; #combine character n of line 2 with an asterisk to form the read pair
-#                             done;
-#                          
-#                         elif [[ $nl == 3 ]]; #if there are three lines then there are inserts after both reads, which means that the last character of line 2 is always read 2 character 1
-#                         then n=$(paste -d' ' <(echo "$m" | head -1) <(echo "$l2" | rev | cut -c1) | sed 's/ //'); #char states composed of line 1 + last character of line 2
-#                           l3=$(echo "$m" | head -3 | tail -1); #get line 3 input
-#                           l3inslen=$(echo "$l3" | tr -d -c 0-9); #deletes all non-numeric characters from line 3 to read the length of the insertion
-#                    
-#                           if [[ $l2inslen == $l3inslen ]]; #case where insertion lengths are the same
-#                           then for i in $(seq 1 1 $l2inslen);
-#                             do n=$(echo "$n";(echo "$l2" | tr -d 0-9 | cut -c$i;echo "$l3" | tr -d 0-9 | cut -c$i) | tr -d '\n'); #combine character n of line 2 with character n of line 3 to form the read pair
-#                             done;
-#                           elif [[ $l2inslen < $l3inslen ]]; #case where read1 (l2) insertion length is less than read 2 (l3)
-#                           then for i in $(seq 1 1 $l2inslen);
-#                             do n=$(echo "$n";(echo "$l2" | tr -d 0-9 | cut -c$i;echo "$l3" | tr -d 0-9 | cut -c$i) | tr -d '\n'); #combine character n of line 2 with character n of line 3 to form the read pair
-#                             done;
-#                             #now combine asterisk for line 2 (which is shorter) with character n of line 3 to form the read pair
-#                             for i in $(seq $(($l2inslen+1)) 1 $l3inslen);
-#                               do n=$(echo "$n";echo -n "*";echo "$l3" | tr -d 0-9 | cut -c$i); 
-#                               done;
-#                           elif [[ $l2inslen > $l3inslen ]]; #case where read1 (l2) insertion length is greater than read 2 (l3)
-#                           then for i in $(seq 1 1 $l3inslen);
-#                             do n=$(echo "$n";(echo "$l2" | tr -d 0-9 | cut -c$i;echo "$l3" | tr -d 0-9 | cut -c$i) | tr -d '\n'); #combine character n of line 2 with character n of line 3 to form the read pair
-#                             done;
-#                             #now combine character n of line 2 with asterisk for line 3 (which is shorter) to form the read pair
-#                             for i in $(seq $(($l3inslen+1)) 1 $l2inslen);
-#                               do n=$(echo "$n";echo "$l2" | tr -d 0-9 | cut -c$i)"*"; 
-#                               done;
-#                           fi;    
-#                         fi;
-#                      
-#                    elif [[ $l1len == 2 ]];
-#                      then n=$(echo "$m" | head -1);
-#                        for i in $(seq 1 1 $l2inslen);
-#                          do n=$(echo "$n";echo -n "*";echo "$l2" | tr -d 0-9 | cut -c$i); #place an asterisk for read 1 in combination with character n of line 2 for read 2
-#                          done;
-#                    else echo "ERROR: incompatible string: $m";
-#                    fi;
-#                    
-#                    nls=$(( $(echo "$n" | wc -l) - 1 )); #count the number of lines in the processed insertion, decrement by one since first line will not get a decimal place
-#                    #calculate the line numbering scheme for the processed insertion, will be like: 474 474.1 474.2
-#                    lz=$(echo "$pos";
-#                      for k in $(seq 1 1 $nls);
-#                        do echo "$pos.$k";
-#                        done;)
-#                        
-#                    #paste line numbers to processed insertion base calls and print out.
-#                    paste -d$'\t' <(echo "$lz") <(echo "$n");
-#                    
-#                  done <<< "$j";); #collect processed insertions in variable $lwi
-#              fi;
-#              
-#              #combine lines with insertions with those without, sort, print out without line breaks to be sent to myiupac in a pipe
-#              echo "$ij"$'\n'"$lwi" | sort -t$'\t' -k1,1n | tr "\n" " ";
-
 }
 export -f myinsertion;
 
@@ -229,28 +129,6 @@ mycountqualreadpairs() {
 }
 export -f mycountqualreadpairs;
 
-#myparsecigar() returns the distance from the contig:site-range right end to the each mapped
-#paired read right end
-#myparsecigar() {
-#               j=$1; #pos:cigar like 11423:4M1D48M2D7M1D38M1D38M72S
-#               pos=$(cut -d: -f1 <<<"$j"); #position of first aligned base
-#               cig=$(cut -d: -f2 <<<"$j"); #cigar string
-#               cigops=$(sed 's/[0-9]*//g' <<<"$cig" | grep -o . | sort -u | tr -d '\n'); #gather all cigar string 'operators'
-#               if [[ "$cigops" == *"P"* ]];
-#               then echo "CIGAR string $cig contains invalid character P, skipping";
-#                 return; #skip the current contig:site-range
-#               else sed 's:\([DIMSX=]\):\1\n:g' <<<"$cig" | sed '/^$/d' | grep -v "I" | sed 's/[DIMSX=]//' | awk '{s+=$1}END{print s}';
-#               fi;
-#}
-#export -f myparsecigar;
-#
-#mygetends() calculates the range of bases associated with the site range as a microhaplotype
-#this amounts to the sequence span that is alignable across (i.e. "common to") all paired read
-#haplotypes extending left and right from the site range
-#called like: 
-#mhends=$( (for i in $(seq 11423 1 11500); do echo 51jcf7180007742276:"$i"-"$i"; done;) \
-#  | parallel --sshloginfile /home/reevesp/machines --env stq --env bam --env mygetends mygetends );
-#mhends=$(sort -t'-' -k1,1n <<<"$mhends");
 mygetends() {
               i=$1; #contig:site-range
               lesr=$(cut -d: -f2 <<<"$i" | cut -d'-' -f1); #left end site range
@@ -496,11 +374,6 @@ basicstats+=$(echo "#""$inf"."$fon"$'\t'"$ts1":"$ni":"$ns":"$ts3")$'\n';
          fonexcsub=$(echo "$fonfa"$'\n'"$e2eident"); #add back end to end identical sequences to unique sequences contained in $fonfa
          hashrg=$(cut -d' ' -f2 <<<"$fonexcsub" | python -c "exec(\"import hashlib, sys\nfor line in sys.stdin:\n\tprint hashlib.sha224(line).hexdigest()\")" | sed "s/^/$k /"); #hash dna sequences, label with readgroup
          allhash+="$hashrg"$'\n'; #add hashed sequences per readgroup to variable
-         
-
-         
-
-
 
        done; #for k in $rgs
        allhash=$(sed '/^$/d' <<< "$allhash"); #remove empty line at end
@@ -532,12 +405,6 @@ echo "$basicstats" | sed '/^$/d';
 ###report counts to parallel statement for log.txt###
 echo "$reportctsfreqs" | sed '/^$/d'; #report to parallel statement
 
-
-
-
-
-
-
        #remake the global output file (this is the one for the final alignment, if -mm or -mb)
        #with nothing removed, if -d option not selected. Otherwise, when $dodedup == "YES" (-d switch on),
        #make the global output file with identical (sub)sequences removed
@@ -548,12 +415,6 @@ echo "$reportctsfreqs" | sed '/^$/d'; #report to parallel statement
        then echo "$fonfa" > "$pd"/alignments/"$inf".global.fa; #produce deduped output for alignment
        fi;
 
-
-
-
-
-
-      
 }
 export -f mycon1;
 
@@ -589,23 +450,6 @@ myalignhaps() {
                 /share/apps/samtools index "$pd"/alignments/"$ss"_aligned_haps.bam 2>/dev/null;
               fi;
               
-#              #final multiple alignment with muscle, include a fragment of the reference contig overlapping the haplotypes
-#              #add reference sequence to the multi fasta of processed haplotypes
-##              flankingl=30; #number of bp to extract on each side of the theoretical max and min boundaries of the haplotypes aligned to the reference
-#              longesth=$(grep -v ^'>' "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1); #find the longest haplotype
-#              reflength=$(tail -1 "$pd"/"$rr"_ref.txt | awk '{print length}');
-#              le=$(( $(cut -d'-' -f1 <<<"$tt") - $longesth - $flankingl )); #determine the left end of the subsequence to extract from the reference contig
-#              if (( $le < 0 )); then le=1; fi; #no negative positions allowed
-#              re=$(( $(cut -d'-' -f2 <<<"$tt") + $longesth + $flankingl )); #determine the right end of the subsequence to extract from the reference contig
-#              if (( $re > $reflength )); then re=$reflength; fi; #cannot exceed the right end of the reference or you will get an error when you try to extract the 30 bp on each end elongated fragment
-#              
-#              refname=$(head -1 "$pd"/"$rr"_ref.txt | sed 's/$/_'$le'_'$re'/'); #name for reference sequence fragment to be included in muscle alignment
-#              trs=$(grep -v ^'>' "$pd"/"$rr"_ref.txt | tr -d '\n' | cut -c"$le"-"$re"); #add the trimmed reference subsequence to the fasta files for muscle alignment 
-#              
-#              muscin="$refname"$'\n'"$trs"$'\n'$(cat "$pd"/alignments/"$i"); #combine trimmed reference fragment
-#              
-#              faTMP=$(/share/apps/muscle -quiet -in <(echo "$muscin")); #capture muscle fasta alignment output in a variable
-             
               #final multiple alignment with muscle
               if [[ $domuscle == "YES" ]];
               then
@@ -716,17 +560,6 @@ esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
-
-#process command line parameters
-#if [[ "$alnr" == "gem" ]];
-#then rgf=12; #read group info in field 12 for gem bam output
-#elif [[ "$alnr" == "bwamem" ]];
-#then rgf=17; #read group info in field 17 for bwamem bam output
-#else echo "Unrecognized aligner: $alnr.  Quitting...";
-#  return;
-#  exit;
-#fi;
-#
 #determine column number containing read group field
 rgf=$(samtools view "$bam" | head -1 | tr "\t" "\n" | sed -n '/RG:Z/=');
 
@@ -801,29 +634,6 @@ echo "Reconstructing haploblocks:";
        --env mycon1 --env myiupac --env myinsertion --env myconseq --env mycountqualreadpairs \
        mycon1) >> "$log";
 
-
-
-
-#souped up double-parallel statment to oversubscribe processors and get CPU usage up to 100%
-#This approach does not work improve cpu usage.
-#machfile="/home/reevesp/machines";
-#nnode=$(wc -l "$machfile" | cut -d' ' -f1);
-#numloc=$(echo "$e" | wc -l);
-#gnuN=$(echo "$numloc / $nnode" | bc); 
-#(echo "$e" | parallel --jobs 1 --sshloginfile "$machfile" \
-#       --env pd --env dodedup --env nooutput --env maxp --env rgf --env stf --env stF --env stq --env bam \
-#       --env mycon1 --env myiupac --env myinsertion --env myconseq --env mycountqualreadpairs \
-#       --pipe -N"$gnuN" \
-#       /home/reevesp/bin/parallel --jobs 24 \
-#       --env pd --env dodedup --env nooutput --env maxp --env rgf --env stf --env stF --env stq --env bam \
-#       --env mycon1 --env myiupac --env myinsertion --env myconseq --env mycountqualreadpairs \
-#       mycon1
-#       ) >> "$log";
-
-
-
-
-
 #mycon1 #          Here is a sample reconstructed *.rp.fq file for a single read pair:
 #mycon1 #          @E00558:144:HHGCMCCXY:5:2224:6654:40055 1:N:0:AAAAAA
 #mycon1 #          CAAAAATATTTTGGTAATTATTCTCAACAAAATGATTTGAAAGGTGTTCATACAACACAAATCGCCTAAGAGACTATGACGGTTTTATCCTCTGATTTGAATTGAGTTTGATCCAAGGGCTTCATATGATTGAAATATAC
@@ -833,9 +643,6 @@ echo "Reconstructing haploblocks:";
 #mycon1 #          ATAAATATGCAAGGAGTCAAAAATATTTGGTAATTAAGCACAAAAACTGATTTGAAATGTGTTCGTACACCACAAATCACCTAAGAGACTATGACGGTTTTACCCTTTGATTTGAATTGAGTTTGATCCAAGGGCTTCATATGCTTTAAA
 #mycon1 #          +
 #mycon1 #          AAFFFJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJFJJJJJFFJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJFJJJJJJJJJJJJJ
-
-
-
 
 #Produce a pairwise local alignment of the haplotypes to their reference using bwa, which might be viewed in something like IGV (Integrative Genomics Viewer).
 #Also produce a multiple alignment of haplotypes to each other using muscle
