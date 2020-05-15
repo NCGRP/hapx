@@ -428,7 +428,20 @@ myalignhaps() {
               #set up for final alignments, include a fragment of the reference contig overlapping the haplotypes
               #add reference sequence to the multi fasta of processed haplotypes
               flankingl=30; #number of bp to extract on each side of the theoretical max and min boundaries of the haplotypes aligned to the reference
-              longesth=$(grep -v ^'>' "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1 | tr -d '\n'); #find the longest haplotype
+              longesth=$(grep -v ^'>' "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1); #find the longest haplotype
+              lig=$(grep -v ^\> "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1);
+     
+     
+     
+     AHHHHHHHHHHHHH! Why won't ^^^ work????!!!
+     
+              if [[ "$debug" == "YES" ]]; 
+              then
+                echo "longesth1 = $longesth" > "$pd"/alignments/aligndb.txt;
+                echo "lig = $lig" >> "$pd"/alignments/aligndb.txt;
+                echo $(grep -v ^'>' "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1) >> "$pd"/alignments/aligndb.txt;
+              fi;
+              
               #reflength=$(tail -1 "$pd"/"$rr"_ref.txt | awk '{print length}');
               reflength=$(tail -n +2 "$pd"/"$rr"_ref.txt | tr -d '\n' | awk '{print length}');
               le=$(( $(cut -d'-' -f1 <<<"$tt") - $longesth - $flankingl )); #determine the left end of the subsequence to extract from the reference contig
@@ -453,7 +466,8 @@ myalignhaps() {
                 le = $le
                 re = $re
                 refname = $refname
-                trs = $trs" > "$pd"/alignments/aligndb.txt;
+                trs = $trs
+                grep = "$(grep -v ^'>' "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1) >> "$pd"/alignments/aligndb.txt;
               fi;
 
               #final mapping with bwa
