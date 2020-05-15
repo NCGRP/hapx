@@ -428,7 +428,7 @@ myalignhaps() {
               #set up for final alignments, include a fragment of the reference contig overlapping the haplotypes
               #add reference sequence to the multi fasta of processed haplotypes
               flankingl=30; #number of bp to extract on each side of the theoretical max and min boundaries of the haplotypes aligned to the reference
-              longesth=$(grep -v ^'>' "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1); #find the longest haplotype
+              longesth=$(grep -v ^'>' "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1 | tr -d '\n'); #find the longest haplotype
               #reflength=$(tail -1 "$pd"/"$rr"_ref.txt | awk '{print length}');
               reflength=$(tail -n +2 "$pd"/"$rr"_ref.txt | tr -d '\n' | awk '{print length}');
               le=$(( $(cut -d'-' -f1 <<<"$tt") - $longesth - $flankingl )); #determine the left end of the subsequence to extract from the reference contig
@@ -440,6 +440,21 @@ myalignhaps() {
               trs=$(grep -v ^'>' "$pd"/"$rr"_ref.txt | tr -d '\n' | cut -c"$le"-"$re"); #add the trimmed reference subsequence to the fasta files for muscle alignment 
               muscin="$refname"$'\n'"$trs"$'\n'$(cat "$pd"/alignments/"$i"); #combine trimmed reference fragment
               echo "$muscin" | tr ' ' '\n' > "$pd"/alignments/"$i"; #overwrite original file containing reads to align with new one that also contains the truncated reference sequence fragment
+
+              if [[ "$debug" == "YES" ]];
+              then echo "i = $i
+                thr = $thr
+                rr = $rr
+                ss = $ss
+                tt = $tt
+                flankingl = $flankingl
+                longesth = $longesth
+                reflength = $reflength
+                le = $le
+                re = $re
+                refname = $refname
+                trs = $trs" > "$pd"/alignments/aligndb.txt;
+              fi;
 
               #final mapping with bwa
               if [[ $dobwa == "YES" ]];
@@ -476,7 +491,7 @@ stf=1; #samtools view -f option
 stF=3852; #samtools view -F option, see https://broadinstitute.github.io/picard/explain-flags.html
 stq=60; #samtools view -q option
 maxp=1000; #max number of NNNNs used as padding between proper read pairs, implicitly sets an upper limit on insert size
-ssh=""; #default is no --sshloginfile, user may enter a path to machines file with -ssh option
+ssh1=""; #default is no --sshloginfile, user may enter a path to machines file with -ssh option
 dodedup=NO; #by default do not remove duplicate (sub)sequences
 doalign=NO; #by default do not produce final alignments of extracted haploblocks to their reference
 domuscle=NO; #by default do not perform a final muscle alignment of qualified haploblocks
@@ -532,7 +547,7 @@ case $key in
     shift # past value
     ;;
     -ssh)
-    ssh="--sshloginfile $2"
+    ssh1="--sshloginfile $2"
     shift # past argument
     shift # past value
     ;;
@@ -635,7 +650,7 @@ echo "Site.Readgroup"$'\t'"NumHblocks:NumIdenticalHblocks:NumIdenticalHblockSubs
 
 echo "Reconstructing haploblocks:";
 
-(echo "$e" | parallel --bar $ssh \
+(echo "$e" | parallel --bar $ssh1 \
        --env pd --env dodedup --env nooutput --env maxp --env rgf --env stf --env stF --env stq --env bam --env debug \
        --env mycon1 --env myiupac --env myinsertion --env myconseq --env mycountqualreadpairs \
        mycon1) >> "$log";
@@ -656,7 +671,7 @@ echo "Reconstructing haploblocks:";
 if [[ $doalign == "YES" ]];
 then
   echo "Final mapping and alignment:"
-  find "$pd"/alignments -name "*.global.fa"  | rev | cut -d'/' -f1 | rev | parallel --bar $ssh --env pd --env domuscle --env dobwa --env myalignhaps myalignhaps;
+  find "$pd"/alignments -name "*.global.fa"  | rev | cut -d'/' -f1 | rev | parallel --bar $ssh1 --env pd --env debug --env domuscle --env dobwa --env myalignhaps myalignhaps;
 fi;
 
 #clean up
