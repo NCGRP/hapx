@@ -11,7 +11,7 @@ Requirements (in path):
 3) GNU parallel
 4) muscle
 
-Usage: hapx -r ref -b bam -o out [-f inc] [-F exc] [-q qual] [-p maxp] [-d -mm -mb -x -db] -s sites
+Usage: hapx -r ref -b bam -o out [-f inc] [-F exc] [-q qual] [-p maxp] [-ssh mach] [-d -mm -mb -x -db] -s sites
 where,
 ref = path to reference genome sequence in multi-fasta format [required]
 bam = path to bam file of reads aligned to ref [required]
@@ -25,6 +25,7 @@ inc = integer flag value for Samtools view -f option (properties of reads to inc
 exc = integer flag value for Samtools view -F option (properties of reads to exclude) [default=3852, exclude unmapped reads && reads whose mate or pair is unmapped && not primary alignment && read fails platform/vendor quality checks && read is PCR or optical duplicate && supplementary alignment]
 qual = Samtools view -q option (minimum mapping quality of included reads) [default=60, don't use 0 use 1 instead, 0 is poorly defined]
 maxp = allow no more than maxp Ns between read pairs. This prevents read pairs from being assembled into an NNN-padded haploblock when they are too far apart.  You may want to set -p maxp according to average library insert size [default 1000];
+mach = path to "machines" file for the gnu parallel command --sshloginfile
 
 -d = delete non-unique haploblocks from output (keep 1 from a set of identical haploblocks, keep the longer haploblock when there are exact match subsequences)
 -mm = align (muscle) extracted haploblocks

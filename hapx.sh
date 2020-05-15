@@ -476,6 +476,7 @@ stf=1; #samtools view -f option
 stF=3852; #samtools view -F option, see https://broadinstitute.github.io/picard/explain-flags.html
 stq=60; #samtools view -q option
 maxp=1000; #max number of NNNNs used as padding between proper read pairs, implicitly sets an upper limit on insert size
+ssh=""; #default is no --sshloginfile, user may enter a path to machines file with -ssh option
 dodedup=NO; #by default do not remove duplicate (sub)sequences
 doalign=NO; #by default do not produce final alignments of extracted haploblocks to their reference
 domuscle=NO; #by default do not perform a final muscle alignment of qualified haploblocks
@@ -527,6 +528,11 @@ case $key in
     ;;
     -p)
     maxp="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -ssh)
+    ssh="--sshloginfile $2"
     shift # past argument
     shift # past value
     ;;
@@ -629,7 +635,7 @@ echo "Site.Readgroup"$'\t'"NumHblocks:NumIdenticalHblocks:NumIdenticalHblockSubs
 
 echo "Reconstructing haploblocks:";
 
-(echo "$e" | parallel --bar --sshloginfile /home/reevesp/machines \
+(echo "$e" | parallel --bar $ssh \
        --env pd --env dodedup --env nooutput --env maxp --env rgf --env stf --env stF --env stq --env bam --env debug \
        --env mycon1 --env myiupac --env myinsertion --env myconseq --env mycountqualreadpairs \
        mycon1) >> "$log";
@@ -650,7 +656,7 @@ echo "Reconstructing haploblocks:";
 if [[ $doalign == "YES" ]];
 then
   echo "Final mapping and alignment:"
-  find "$pd"/alignments -name "*.global.fa"  | rev | cut -d'/' -f1 | rev | parallel --bar --sshloginfile /home/reevesp/machines --env pd --env domuscle --env dobwa --env myalignhaps myalignhaps;
+  find "$pd"/alignments -name "*.global.fa"  | rev | cut -d'/' -f1 | rev | parallel --bar $ssh --env pd --env domuscle --env dobwa --env myalignhaps myalignhaps;
 fi;
 
 #clean up
