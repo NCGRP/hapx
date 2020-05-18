@@ -459,8 +459,14 @@ myalignhaps() {
               #final mapping with bwa
               if [[ $dobwa == "YES" ]];
               then
+#              use below for troubleshooting, --threads will fail in slurm with n=1 (ncores=1)
+#                /share/apps/bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" | \
+#                  /share/apps/samtools sort -O BAM --threads "$thr" | \
+#                  /share/apps/samtools view -F 2048 -O BAM > "$pd"/alignments/"$ss"_aligned_haps.bam; #-F 2048 excludes supplementary alignments
+#                /share/apps/samtools index "$pd"/alignments/"$ss"_aligned_haps.bam;
+
                 /share/apps/bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" 2>/dev/null | \
-                  /share/apps/samtools sort -O BAM --threads "$thr" 2>/dev/null | \
+                  /share/apps/samtools sort -O BAM 2>/dev/null | \
                   /share/apps/samtools view -F 2048 -O BAM 2>/dev/null > "$pd"/alignments/"$ss"_aligned_haps.bam; #-F 2048 excludes supplementary alignments
                 /share/apps/samtools index "$pd"/alignments/"$ss"_aligned_haps.bam 2>/dev/null;
               fi;
