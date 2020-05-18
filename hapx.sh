@@ -412,7 +412,8 @@ echo "$reportctsfreqs" | sed '/^$/d'; #report to parallel statement
        if [[ "$nooutput" == "NO" ]] && [[ "$dodedup" == "NO" ]]; 
        then sed -e '/^>/s/$/@/' -e 's/^>/#/' <(echo "$mfa") | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}' | tr " " "\n" > "$pd"/alignments/"$inf".global.fa; #produce undeduped output for alignment
        elif [[ "$nooutput" == "NO" ]] && [[ "$dodedup" == "YES" ]]
-       then echo "$fonfa" > "$pd"/alignments/"$inf".global.fa; #produce deduped output for alignment
+       then echo "$fonfa" | tr ' ' '\n' > "$pd"/alignments/"$inf".global.fa; #produce deduped output for alignment
+       #echo "$fonfa" > "$pd"/alignments/"$inf".global.fa; #produce deduped output for alignment
        fi;
 
 }
@@ -429,20 +430,6 @@ myalignhaps() {
               #add reference sequence to the multi fasta of processed haplotypes
               flankingl=30; #number of bp to extract on each side of the theoretical max and min boundaries of the haplotypes aligned to the reference
               longesth=$(grep -v ^'>' "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1); #find the longest haplotype
-              lig=$(grep -v ^\> "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1);
-     
-     
-     
-     AHHHHHHHHHHHHH! Why won't ^^^ work????!!!
-     
-              if [[ "$debug" == "YES" ]]; 
-              then
-                echo "longesth1 = $longesth" > "$pd"/alignments/aligndb.txt;
-                echo "lig = $lig" >> "$pd"/alignments/aligndb.txt;
-                echo $(grep -v ^'>' "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1) >> "$pd"/alignments/aligndb.txt;
-              fi;
-              
-              #reflength=$(tail -1 "$pd"/"$rr"_ref.txt | awk '{print length}');
               reflength=$(tail -n +2 "$pd"/"$rr"_ref.txt | tr -d '\n' | awk '{print length}');
               le=$(( $(cut -d'-' -f1 <<<"$tt") - $longesth - $flankingl )); #determine the left end of the subsequence to extract from the reference contig
               if (( $le < 0 )); then le=1; fi; #no negative positions allowed
@@ -466,8 +453,7 @@ myalignhaps() {
                 le = $le
                 re = $re
                 refname = $refname
-                trs = $trs
-                grep = "$(grep -v ^'>' "$pd"/alignments/"$i" | awk '{print length}' | sort -nr | head -1) >> "$pd"/alignments/aligndb.txt;
+                trs = $trs" >> "$pd"/alignments/aligndb.txt;
               fi;
 
               #final mapping with bwa
