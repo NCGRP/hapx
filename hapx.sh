@@ -678,7 +678,7 @@ if [[ $doalign == "YES" ]];
 then
   echo "Final mapping and alignment:"
   if [[ $(find "$pd"/alignments -name "*.global.fa") == "" ]];
-  then touch "$pd"/alignments/NoReadsSoNoAlignmentPossible"; #mark that no reads were found so no alignment is possible
+  then touch "$pd"/alignments/NoReadsSoNoAlignmentPossible; #mark that no reads were found so no alignment is possible
   else find "$pd"/alignments -name "*.global.fa"  | rev | cut -d'/' -f1 | rev | parallel --bar $ssh1 --env pd --env debug --env domuscle --env dobwa --env myalignhaps myalignhaps;
   fi;
 fi;
