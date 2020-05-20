@@ -459,7 +459,7 @@ myalignhaps() {
               #final mapping with bwa
               if [[ $dobwa == "YES" ]];
               then
-#              use below for troubleshooting, --threads will fail in slurm with n=1 (ncores=1)
+#              use below for troubleshooting, samtools sort --threads will fail in slurm with n=1 (ncores=1), bwa mem -t "$thr" will not (?)
 #                /share/apps/bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" | \
 #                  /share/apps/samtools sort -O BAM --threads "$thr" | \
 #                  /share/apps/samtools view -F 2048 -O BAM > "$pd"/alignments/"$ss"_aligned_haps.bam; #-F 2048 excludes supplementary alignments
@@ -677,7 +677,10 @@ echo "Reconstructing haploblocks:";
 if [[ $doalign == "YES" ]];
 then
   echo "Final mapping and alignment:"
-  find "$pd"/alignments -name "*.global.fa"  | rev | cut -d'/' -f1 | rev | parallel --bar $ssh1 --env pd --env debug --env domuscle --env dobwa --env myalignhaps myalignhaps;
+  if [[ $(find "$pd"/alignments -name "*.global.fa") == ""]];
+  then touch "$pd"/alignments/NoReadsSoNoAlignmentPossible"; #mark that no reads were found so no alignment is possible
+  else find "$pd"/alignments -name "*.global.fa"  | rev | cut -d'/' -f1 | rev | parallel --bar $ssh1 --env pd --env debug --env domuscle --env dobwa --env myalignhaps myalignhaps;
+  fi;
 fi;
 
 #clean up
