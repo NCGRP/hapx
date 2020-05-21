@@ -498,6 +498,7 @@ stF=3852; #samtools view -F option, see https://broadinstitute.github.io/picard/
 stq=60; #samtools view -q option
 maxp=1000; #max number of NNNNs used as padding between proper read pairs, implicitly sets an upper limit on insert size
 ssh1=""; #default is no --sshloginfile, user may enter a path to machines file with -ssh option
+suppar=""; #suppress parallel contig extraction, default is allow GNU parallel --jobs equal to max, -sp switch will set $suppar to --jobs=1 for contig extraction
 dodedup=NO; #by default do not remove duplicate (sub)sequences
 doalign=NO; #by default do not produce final alignments of extracted haploblocks to their reference
 domuscle=NO; #by default do not perform a final muscle alignment of qualified haploblocks
@@ -579,6 +580,10 @@ case $key in
     debug=YES
     shift # past argument
     ;;
+    -sp)
+    suppar="--jobs 1";
+    shift # past argument
+    ;;
     *)    # unknown option
     POSITIONAL+=("$1") # save it in an array for later
     shift # past argument
@@ -633,11 +638,11 @@ echo >> "$log";
 echo "Isolating contigs:"; #this step is fast
 #Below modify the reference genome to have a '>' as the last line before extracting contig with sed.
 #This a hack to take care of the case where the contig of interest is the last one in the reference
-echo "$e" | cut -d: -f1 | sort -u | parallel --bar 'sed -n -e "/^>{}$/,/>/p" '"<(cat "$ref" <(echo \>))"' | sed "$ d" > '"$pd/"'{}_ref.txt'; #sed extracts lines from name of contig of interest until next contig name line, second sed deletes the last line
+echo "$e" | cut -d: -f1 | sort -u | parallel --bar $suppar 'sed -n -e "/^>{}$/,/>/p" '"<(cat "$ref" <(echo \>))"' | sed "$ d" > '"$pd/"'{}_ref.txt'; #sed extracts lines from name of contig of interest until next contig name line, second sed deletes the last line
 #echo "$e" | cut -d: -f1 | sort -u | parallel --bar 'sed -n -e "/^>{}$/,/>/p" '"$ref"' | sed "$ d" > '"$pd/"'{}_ref.txt'; #sed extracts lines from name of contig of interest until next contig name line, second sed deletes the last line
 
 echo "Indexing contigs:"; #this step should also be fast
-echo "$e" | cut -d: -f1 | sort -u | parallel --bar 'bwa index '"$pd/"'{}_ref.txt 2>/dev/null'; #index the isolated contigs
+echo "$e" | cut -d: -f1 | sort -u | parallel --bar $suppar 'bwa index '"$pd/"'{}_ref.txt 2>/dev/null'; #index the isolated contigs
 
 
 #The following single parallel step consolidates independent functions from an earlier prototype of hapx, in order to keep more in memory and less on the drives
@@ -656,7 +661,7 @@ echo "Site.Readgroup"$'\t'"NumHblocks:NumIdenticalHblocks:NumIdenticalHblockSubs
 
 echo "Reconstructing haploblocks:";
 
-(echo "$e" | parallel --bar $ssh1 \
+(echo "$e" | parallel --bar $ssh1 $suppar \
        --env pd --env dodedup --env nooutput --env maxp --env rgf --env stf --env stF --env stq --env bam --env debug \
        --env mycon1 --env myiupac --env myinsertion --env myconseq --env mycountqualreadpairs \
        mycon1) >> "$log";
@@ -677,9 +682,12 @@ echo "Reconstructing haploblocks:";
 if [[ $doalign == "YES" ]];
 then
   echo "Final mapping and alignment:"
-  if [[ $(find "$pd"/alignments -name "*.global.fa") == "" ]];
-  then touch "$pd"/alignments/NoReadsSoNoAlignmentPossible; #mark that no reads were found so no alignment is possible
-  else find "$pd"/alignments -name "*.global.fa"  | rev | cut -d'/' -f1 | rev | parallel --bar $ssh1 --env pd --env debug --env domuscle --env dobwa --env myalignhaps myalignhaps;
+  
+  #if [[ $(find "$pd"/alignments -name "*.global.fa") == "" ]];
+
+  if [ ! -f "$pd"/alignments/*.global.fa ];
+  then echo "0" > "$pd"/alignments/NoReadsSoNoAlignmentPossible; #mark that no reads were found so no alignment is possible
+  else find "$pd"/alignments -name "*.global.fa"  | rev | cut -d'/' -f1 | rev | parallel --bar $suppar $ssh1 --env pd --env debug --env domuscle --env dobwa --env myalignhaps myalignhaps;
   fi;
 fi;
 
