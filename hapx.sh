@@ -137,7 +137,8 @@ mygetends() {
               #f=$(samtools view -q 1 Hs1pro1l1.finalaln.bam 51jcf7180007742276:"$i"-"$i" | cut -d$'\t' -f4 | sort -nr | head -1);
               
               #get LE and cigar string for each sequence
-              g=$(/share/apps/samtools view -F 2048 -q "$stq" "$bam" "$i" | cut -d$'\t' -f4,6); #-F 2048 excludes supplementary alignments
+              #g=$(/share/apps/samtools view -F 2048 -q "$stq" "$bam" "$i" | cut -d$'\t' -f4,6); #-F 2048 excludes supplementary alignments
+              g=$(samtools view -F 2048 -q "$stq" "$bam" "$i" | cut -d$'\t' -f4,6); #-F 2048 excludes supplementary alignments
               if [[ "$g" == "" ]]; then return; fi; #bail out if there are no aligned reads at the position
               
               #calculate closest ends to left side of site range
@@ -185,7 +186,8 @@ mycon1() {
        contigname=$(cut -d: -f1 <<< "$site");
 
        #extract read pairs at target sites using samtools. Obey include, exclude and quality rules from command line
-       tmpf1=$(/share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" "$bam" "$site" | sort); #get read pairs mapped to contig:site-range in original bwa or gem alignment
+       #tmpf1=$(/share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" "$bam" "$site" | sort); #get read pairs mapped to contig:site-range in original bwa or gem alignment
+       tmpf1=$(samtools view -f "$stf" -F "$stF" -q "$stq" "$bam" "$site" | sort); #get read pairs mapped to contig:site-range in original bwa or gem alignment
        if [[ "$debug" == "YES" ]]; then echo "$tmpf1" > "$pd"/"$site".tmpf1; fi;
        
        #reads extracted above must contain -both- pairs within the range $site. This is undesirable, for example
@@ -197,7 +199,8 @@ mycon1() {
        
        #htmpf=$(grep ^'@' <<< "$tmpf1"); #sam header from $tmpf1
        unptmpf=$(cut -d$'\t' -f1 <<< "$tmpf1" | sort -u); #acquire list of all reads that map to the site-range, includes paired and unpaired
-       btmpf=$(/share/apps/samtools view "$bam" "$contigname"); #get all reads associated with contig
+       #btmpf=$(/share/apps/samtools view "$bam" "$contigname"); #get all reads associated with contig
+       btmpf=$(samtools view "$bam" "$contigname"); #get all reads associated with contig
        tmpf=$(LC_ALL=C grep -w -F -f <(echo "$unptmpf") <<< "$btmpf"); #get read pairs, any one of which mapped to site-range
 
        #bwa mem, used later, does not use Illumina quality scores for mapping (per Heng Li:https://sourceforge.net/p/bio-bwa/mailman/message/34410817/)
@@ -243,14 +246,18 @@ mycon1() {
            #myrealign takes the reads extracted from the primary alignment ($rpfq) and realigns them independently to the contig as reference
            #mapping quality changes upon realignment, extract only reads with user defined properties (/share/apps/samtools view -fFq), convert those to proper fastq file and re-align again
            #-p, paired-end mode assumes read pairs are consecutive; -M mark split hits as secondary alignments (so they can be ignored in samtools view -F step)
-           t=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$rpfq") 2>/dev/null | \
-               /share/apps/samtools sort -O SAM 2>/dev/null | \
-               /share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" 2>/dev/null | \
+           #t=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$rpfq") 2>/dev/null | \
+           #    /share/apps/samtools sort -O SAM 2>/dev/null | \
+           #    /share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" 2>/dev/null | \
+           #    awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
+           t=$(bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$rpfq") 2>/dev/null | \
+               samtools sort -O SAM 2>/dev/null | \
+               samtools view -f "$stf" -F "$stF" -q "$stq" 2>/dev/null | \
                awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
 
            if [[ $(echo "$t") != "" ]]; #only re-realign if there are reads left after latest quality filter
-           then x2xsam=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$t") 2>/dev/null | awk -F$'\t' '$4!="*"{print $0}'); #perform second realignment and manually remove any unmapped reads that may have been found as indicated by a * in the position column $4
-             #x2xsam=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$t") 2>/dev/null | awk -F$'\t' '$3!="*"{print $0}'); #perform second realignment and manually remove any unmapped reads that may have been found (original statement, probably wrong vis a vis $3 vs $4)
+           then x2xsam=$(bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$t") 2>/dev/null | awk -F$'\t' '$4!="*"{print $0}'); #perform second realignment and manually remove any unmapped reads that may have been found as indicated by a * in the position column $4
+             #x2xsam=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$t") 2>/dev/null | awk -F$'\t' '$4!="*"{print $0}'); #perform second realignment and manually remove any unmapped reads that may have been found as indicated by a * in the position column $4
 
            else continue; #no reads left to align, continue to next
            fi;
@@ -263,7 +270,8 @@ mycon1() {
            rp=$(awk -F$'\t' -v h=$h '$3==h{print $1}' <<<"$x2xsam" | sort -u | tr ":" "_"); #extract the unique read name from the sam formatted data that contains a single mapped read pair
            rname=$(tr ':' '_' <<<"$i")"_$rp"; #get a root name for the read pair/contig alignment
 
-           mp=$(/share/apps/samtools mpileup -A <(echo "$x2xsam") 2>/dev/null); #form the pileup file, use -A to include orphan reads. samtools mpileup by default excludes improper pairs. in hapx, bwa mem will find no proper pairs because too few reads are used during alignment
+           #mp=$(/share/apps/samtools mpileup -A <(echo "$x2xsam") 2>/dev/null); #form the pileup file, use -A to include orphan reads. samtools mpileup by default excludes improper pairs. in hapx, bwa mem will find no proper pairs because too few reads are used during alignment
+           mp=$(samtools mpileup -A <(echo "$x2xsam") 2>/dev/null); #form the pileup file, use -A to include orphan reads. samtools mpileup by default excludes improper pairs. in hapx, bwa mem will find no proper pairs because too few reads are used during alignment
 
            #Extract the pos and base columns, remove read start ^., read end $, remove deletion indicators (e.g. -2AC, they are followed with *), pass to myinsertion subroutine to control insertions, then to myiupac to recode conflicts as ambiguous and produce the consensus sequence
            base1=$(cut -d$'\t' -f2,5 <<<"$mp"| sed 's/\^.//g' | sed 's/\$//g' | sed 's/-.*//g' | tr "\n" " " | myinsertion | myiupac); #haplotype extraction, unpadded as of now
@@ -465,16 +473,22 @@ myalignhaps() {
 #                  /share/apps/samtools view -F 2048 -O BAM > "$pd"/alignments/"$ss"_aligned_haps.bam; #-F 2048 excludes supplementary alignments
 #                /share/apps/samtools index "$pd"/alignments/"$ss"_aligned_haps.bam;
 
-                /share/apps/bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" 2>/dev/null | \
-                  /share/apps/samtools sort -O BAM 2>/dev/null | \
-                  /share/apps/samtools view -F 2048 -O BAM 2>/dev/null > "$pd"/alignments/"$ss"_aligned_haps.bam; #-F 2048 excludes supplementary alignments
-                /share/apps/samtools index "$pd"/alignments/"$ss"_aligned_haps.bam 2>/dev/null;
-              fi;
+                #/share/apps/bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" 2>/dev/null | \
+                # /share/apps/samtools sort -O BAM 2>/dev/null | \
+                #  /share/apps/samtools view -F 2048 -O BAM 2>/dev/null > "$pd"/alignments/"$ss"_aligned_haps.bam; #-F 2048 excludes supplementary alignments
+                #/share/apps/samtools index "$pd"/alignments/"$ss"_aligned_haps.bam 2>/dev/null;
+
+                 bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" 2>/dev/null | \
+                  samtools sort -O BAM 2>/dev/null | \
+                  samtools view -F 2048 -O BAM 2>/dev/null > "$pd"/alignments/"$ss"_aligned_haps.bam; #-F 2048 excludes supplementary alignments
+                samtools index "$pd"/alignments/"$ss"_aligned_haps.bam 2>/dev/null;
+             fi;
               
               #final multiple alignment with muscle
               if [[ $domuscle == "YES" ]];
               then
-                faTMP=$(/share/apps/muscle -quiet -in "$pd"/alignments/"$i"); #capture muscle fasta alignment output in a variable
+                #faTMP=$(/share/apps/muscle -quiet -in "$pd"/alignments/"$i"); #capture muscle fasta alignment output in a variable
+                faTMP=$(muscle -quiet -in "$pd"/alignments/"$i"); #capture muscle fasta alignment output in a variable
 
                 #put reference sequence at top of muscle output file and sort by read group
                 faTMP2=$(sed -e '/^>/s/$/@/' -e 's/^>/#>/' <<<"$faTMP" | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d'); #make output 1 line per sequence
