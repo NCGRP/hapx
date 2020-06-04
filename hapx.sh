@@ -370,8 +370,8 @@ mycon1() {
 
 
 ###accumulate counts to report to parallel statement for log.txt###
-echo "#""$inf"."$fon"$'\t'"$ts1":"$ni":"$ns":"$ts3";
-#basicstats+=$(echo "#""$inf"."$fon"$'\t'"$ts1":"$ni":"$ns":"$ts3")$'\n'; 
+#echo "#""$inf"."$fon"$'\t'"$ts1":"$ni":"$ns":"$ts3";
+basicstats+=$(echo "#""$inf"."$fon"$'\t'"$ts1":"$ni":"$ns":"$ts3")$'\n'; 
 ###                                               ###
 
 
@@ -389,7 +389,7 @@ echo "#""$inf"."$fon"$'\t'"$ts1":"$ni":"$ns":"$ts3";
 
 
 ###report accumulated counts to parallel statement for log.txt###
-#echo "$basicstats" | sed '/^$/d';
+echo "$basicstats" | sed '/^$/d';
 
 
        #at this point you have all unique sequences in $fonfa since the last member of $rgs is ">rp", which includes all sequences
@@ -409,11 +409,11 @@ echo "#""$inf"."$fon"$'\t'"$ts1":"$ni":"$ns":"$ts3";
              cts+="$nla":;
              freqs+="$nlf":; 
            done;
-         echo "@""$inf"."$fon"$'\t'"$cts"$'\t'"$freqs" | sed 's/:$//' | sed "s/:\t/\t/"; #accumulate variable to report allele counts and frequencies
-         #reportctsfreqs+=$(echo "@""$inf"."$fon"$'\t'"$cts"$'\t'"$freqs" | sed 's/:$//' | sed "s/:\t/\t/")$'\n'; #accumulate variable to report allele counts and frequencies
+         #echo "@""$inf"."$fon"$'\t'"$cts"$'\t'"$freqs" | sed 's/:$//' | sed "s/:\t/\t/"; #accumulate variable to report allele counts and frequencies
+         reportctsfreqs+=$(echo "@""$inf"."$fon"$'\t'"$cts"$'\t'"$freqs" | sed 's/:$//' | sed "s/:\t/\t/")$'\n'; #accumulate variable to report allele counts and frequencies
        done;
 ###report counts to parallel statement for log.txt###
-#echo "$reportctsfreqs" | sed '/^$/d'; #report to parallel statement
+echo "$reportctsfreqs" | sed '/^$/d'; #report to parallel statement
 
        #remake the global output file (this is the one for the final alignment, if -mm or -mb)
        #with nothing removed, if -d option not selected. Otherwise, when $dodedup == "YES" (-d switch on),
