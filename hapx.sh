@@ -277,7 +277,8 @@ mycon1() {
            base1=$(cut -d$'\t' -f2,5 <<<"$mp"| sed 's/\^.//g' | sed 's/\$//g' | sed 's/-.*//g' | tr "\n" " " | myinsertion | myiupac); #haplotype extraction, unpadded as of now
 
            #Deal with contiguity and padding
-           csq=$(myconseq "$(cut -d$'\t' -f2)" <<<"$mp" | grep -v "^1\-" | sed 's/-/ 1 /g'); #identify regions where reads are not aligned consecutively to the reference, exclude the range from 1-start of overlap, set up to use as an interval for seq command
+           #csq=$(myconseq "$(cut -d$'\t' -f2)" <<<"$mp" | grep -v "^1\-" | sed 's/-/ 1 /g'); #identify regions where reads are not aligned consecutively to the reference, exclude the range from 1-start of overlap, set up to use as an interval for seq command
+           csq=$(myconseq $(cut -d$'\t' -f2 <<<"$mp") | grep -v "^1\-" | sed 's/-/ 1 /g'); #identify regions where reads are not aligned consecutively to the reference, exclude the range from 1-start of overlap, set up to use as an interval for seq command
            
            #calculate the maximum pad size, if any pad is larger than $maxp continue to next contig:read-pair
            maxn=$(awk -F' ' '{print $3 - $1}' <<<"$csq" | sort -nr | head -1); 
