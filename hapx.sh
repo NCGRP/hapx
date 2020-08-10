@@ -431,11 +431,14 @@ echo "$reportctsfreqs" | sed '/^$/d'; #report to parallel statement
 export -f mycon1;
 
 myalignhaps() {
-              i=$1; #i is structured like jcf7180008848314_28717-32294.global.fa
+              i=$1; #i is structured like *jcf7180008848314_28717-32294.global.fa
               thr=$(lscpu | grep "^CPU(s):" | awk '{print $2}'); #max threads
-              rr=$(cut -d'_' -f1 <<<"$i"); #reference contig name, e.g. jcf7180008454378
-              ss=$(cut -d'.' -f1 <<<"$i"); #refcontig+siterange, e.g. jcf7180008454378_303-304
-              tt=$(cut -d'_' -f2 <<<"$ss"); #siterange, e.g. 303-304
+              #rr=$(cut -d'_' -f1 <<<"$i"); #reference contig name, e.g. jcf7180008454378
+              #ss=$(cut -d'.' -f1 <<<"$i"); #refcontig+siterange, e.g. jcf7180008454378_303-304
+              #tt=$(cut -d'_' -f2 <<<"$ss"); #siterange, e.g. 303-304
+              rr=$(rev <<< "$i" | cut -d'_' -f2- | rev ); #reference contig name, e.g. jcf7180008454378
+              ss=$(cut -d'.' -f1 <<<"$i"); #refcontig+siterange, e.g. 50_ORF803_jcf7180008454378_303-304
+              tt=$(rev <<< "$ss" | cut -d'_' -f1 | rev); #siterange, e.g. 303-304
 
               #set up for final alignments, include a fragment of the reference contig overlapping the haplotypes
               #add reference sequence to the multi fasta of processed haplotypes
