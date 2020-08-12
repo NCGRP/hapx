@@ -682,6 +682,7 @@ echo "Site.Readgroup"$'\t'"NumHblocks:NumIdenticalHblocks:NumIdenticalHblockSubs
 echo "Reconstructing haploblocks:";
 
 (echo "$e" | parallel --bar $ssh1 $suppar \
+       --env PATH \
        --env pd --env dodedup --env nooutput --env maxp --env rgf --env stf --env stF --env stq --env bam --env debug \
        --env mycon1 --env myiupac --env myinsertion --env myconseq --env mycountqualreadpairs \
        mycon1) >> "$log";
@@ -706,7 +707,7 @@ then
   #if [ ! -f "$pd"/alignments/*.global.fa ];
   if [[ $(find "$pd"/alignments -name "*.global.fa") == "" ]];
   then echo "0" > "$pd"/alignments/NoReadsSoNoAlignmentPossible; #mark that no reads were found so no alignment is possible
-  else find "$pd"/alignments -name "*.global.fa"  | rev | cut -d'/' -f1 | rev | parallel --bar $suppar $ssh1 --env pd --env debug --env domuscle --env dobwa --env myalignhaps myalignhaps;
+  else find "$pd"/alignments -name "*.global.fa"  | rev | cut -d'/' -f1 | rev | parallel --bar $suppar $ssh1 --env PATH --env pd --env debug --env domuscle --env dobwa --env myalignhaps myalignhaps;
   fi;
 fi;
 
