@@ -128,8 +128,9 @@ pd=$(pwd); export pd;
 
 #count total and distinct haploblocks
 grep ^# log.txt | tr '-' '_' > numblocks.txt;
-a=$(cut -d. -f1 numblocks.txt | uniq); #list of contig:site-ranges
-b=$(cut -d. -f2 numblocks.txt | cut -d$'\t' -f1 | sort -u); export b; #determine set of possible read groups
+a=$(rev numblocks.txt | cut -d. -f2- | rev | uniq); #list of contig:site-ranges
+b=$(rev numblocks.txt | cut -d. -f1 | rev | cut -d$'\t' -f1 | sort -u); export b; #determine set of possible read groups
+
 
 #iterate over read groups to count haploblocks
 for j in $b;
