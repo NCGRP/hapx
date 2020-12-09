@@ -150,7 +150,7 @@ for j in $b;
 grep ^'@' log.txt | tr '-' '_' | cut -d$'\t' -f1,3 | sort -t_ -k2,2n > freqs.txt;
 grep ^'@' log.txt | tr '-' '_' | cut -d$'\t' -f1,2 | sort -t_ -k2,2n > counts.txt;
 
-c=$(cut -d. -f1 counts.txt | uniq); #list of contig:site-ranges
+c=$(rev counts.txt | cut -d. -f2- | rev | uniq); #list of contig:site-ranges
 >names.txt;
 echo "$c" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env pd --env mypa /home/reevesp/bin/parallel --jobs 96 --env pd --env mypa mypa >> names.txt; #counting sub
 
