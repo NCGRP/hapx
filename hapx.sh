@@ -713,7 +713,8 @@ fi;
 
 #clean up
 if [[ $debug == "NO" ]];
-then rm "$pd"/*_ref.txt*;
+then find "$pd" -name "*_ref.txt*" -print0 | xargs -0 rm;
+  #rm "$pd"/*_ref.txt*;
 fi;
 
 date >> "$log";
