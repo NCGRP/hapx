@@ -437,7 +437,8 @@ myalignhaps() {
               #ss=$(cut -d'.' -f1 <<<"$i"); #refcontig+siterange, e.g. jcf7180008454378_303-304
               #tt=$(cut -d'_' -f2 <<<"$ss"); #siterange, e.g. 303-304
               rr=$(rev <<< "$i" | cut -d'_' -f2- | rev ); #reference contig name, e.g. jcf7180008454378
-              ss=$(cut -d'.' -f1 <<<"$i"); #refcontig+siterange, e.g. 50_ORF803_jcf7180008454378_303-304
+              #ss=$(cut -d'.' -f1 <<<"$i"); #refcontig+siterange, e.g. 50_ORF803_jcf7180008454378_303-304
+              ss=$(rev <<< "$i" | cut -d'.' -f3- | rev); #refcontig+siterange, e.g. 50_ORF803_jcf7180008454378_303-304
               tt=$(rev <<< "$ss" | cut -d'_' -f1 | rev); #siterange, e.g. 303-304
 
               #set up for final alignments, include a fragment of the reference contig overlapping the haplotypes
