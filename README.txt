@@ -1,4 +1,5 @@
-hapx extracts molecular haplotypes from bam files at user-specified sites
+hapx extracts phased reads from bam files at user-specified sites, as a step toward computing
+microhaplotype diversity
 
 In working folder:
 1) A fasta-formatted reference sequence
@@ -15,7 +16,7 @@ Usage: hapx -r ref -b bam -o out [-f inc] [-F exc] [-q qual] [-p maxp] [-ssh mac
 where,
 ref = path to reference genome sequence in multi-fasta format [required]
 bam = path to bam file of reads aligned to ref [required]
-out = name of directory for output files, not a path, will be created in current directory
+out = name of directory for output files (not a path), will be created in current directory
 sites = path to file containing genomic positions to use [required]
      Provide a line delimited list of the form:
          jcf7180008454378:303-303
@@ -34,44 +35,11 @@ mach = path to "machines" file for the gnu parallel command --sshloginfile, forc
 -db = debugging mode, save some internal data structures as files (be careful, this can produce a lot of files)
 -sp = suppress parallel extraction of contig sequences from references (sets GNU parallel --jobs=1)
 
-Notes: Tested with both gem and bwa mem aligners.
-
-Examples: ./hapx.sh /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta /share/space/reevesp/patellifolia/xtr/AllP.merged.bam bwamem jcf7180008454378:303-304,jcf7180008531951:103-495,jcf7180008395354:294-295,jcf7180008827236:1031-1032,jcf7180008378511:277-278,jcf7180008637475:7-8,jcf7180008587925:106-107,jcf7180008527965:177-178,jcf7180008578969:84-85,jcf7180008484650:470-471,jcf7180008856767:98710-98886;
-
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -a gem -s jcf7180008454378:303-304,jcf7180008531951:103-495,jcf7180008395354:294-295,jcf7180008827236:1031-1032,jcf7180008378511:277-278,jcf7180008637475:7-8,jcf7180008587925:106-107,jcf7180008527965:177-178,jcf7180008578969:84-85,jcf7180008484650:470-471,jcf7180008856767:98710-98886;
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -a gem -d -s jcf7180008454378:303-304,jcf7180008531951:103-495,jcf7180008856767:98710-98886;
-
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -a gem -d -s jcf7180008454378:204-304,jcf7180008531951:395-495,jcf7180008395354:195-295,jcf7180008827236:932-1032,jcf7180008378511:178-278,jcf7180008637475:7-107,jcf7180008587925:7-107,jcf7180008527965:78-178,jcf7180008578969:84-184,jcf7180008484650:371-471,jcf7180008856767:98710-98810;
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o s1 -a gem -d -m -s sites.txt;
-
-#use a function to generate target sites (effectively a sliding window), set range to average library insert size, step to 1
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 1305 -a gem -m -s <(for i in $(seq 1 1 305); do echo jcf7180008587925:"$i"-$(( $i + 1 )); done;);
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 25544 -a gem -m -s <(for i in $(seq 1 25 544); do echo jcf7180008531951:"$i"-$(( $i + 25 )); done;)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500 -a gem -m -s <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500d -a gem -d -s <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500dx -a gem -d -x -s <(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500step1 -a gem -d -x -s <(for i in $(seq 1 1 157500); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o 157500step2 -a gem -d -x -s <(for i in $(seq 1 1 157500); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
-
-#takes about 4 hrs for 50kb (for 1GB then, 9.132 years on 232 cores)
-#after improvements, now takes about 1.5 hrs for 50kb (for 1GB then, 3.424 years on 232 cores), 5 hrs for 150kb (for 1GB then, 3.8 yrs on 232 cores)
-#after adding freqs, 0.3hrs for 10kb (1GB 3.4 years), 5hrs for 150kb --no noticeable increase in time
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_50kb -a gem -x -s <(for i in $(seq 73000 1 123000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_10kb -a gem -d -s <(for i in $(seq 73000 1 83000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_50kb2 -a gem -d -s <(for i in $(seq 73000 1 123000); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_MADS2 -a gem -d -m -s <(for i in $(seq 97315 1 97494); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o BvFl1_MADS -a gem -d -x -s <(for i in $(seq 97315 1 97494); do echo jcf7180008856767:"$i"-$(( $i + 1 )); done;)
-
-./hapx.sh -r /share/space/reevesp/patellifolia/ref/Ppanfinal.genome.scf.fasta -b /share/space/reevesp/patellifolia/xtr/AllP.merged.gem.bam -o s1 -a gem -s sites1.txt;
-
-<(for i in $(seq 1 1 305); do echo jcf7180008587925:"$i"-$(( $i + 1 )); done;)
-<(for i in $(seq 1 25 544); do echo jcf7180008531951:"$i"-$(( $i + 25 )); done;)
-<(for i in $(seq 1 100 157500); do echo jcf7180008856767:"$i"-$(( $i + 100 )); done;)
+Examples: See https://github.com/NCGRP/mb1suppl
 
 
 
-
-#some postprocessing
+#some basic postprocessing
 #postprocess haploblock counts in log.txt into something plottable
 mytd1() {
         i=$1; #a position on the reference is incoming
@@ -137,12 +105,12 @@ for j in $b;
   do k="$j"; export k; #do this so iterator can be sent to nodes using --sshloginfile
     echo "$j: counting distinct alleles";
     >"$pd"/"$j".distallel.txt; #initialize output file with a header for count of distinct alleles within populations
-    echo "$a" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env mytd1 --env pd --env k /home/reevesp/bin/parallel --jobs 96 --env mytd1 --env pd --env k mytd1 >> "$pd"/"$j".distallel.txt;
-    #echo "$a" | parallel --jobs 1 --pipe -N960 --env mytd1 --env pd --env j /home/reevesp/bin/parallel --jobs 96 --env mytd1 --env pd --env j mytd1 >> "$pd"/"$j".distallel.txt;
+    echo "$a" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env mytd1 --env pd --env k /home/user/bin/parallel --jobs 96 --env mytd1 --env pd --env k mytd1 >> "$pd"/"$j".distallel.txt;
+    #echo "$a" | parallel --jobs 1 --pipe -N960 --env mytd1 --env pd --env j /home/user/bin/parallel --jobs 96 --env mytd1 --env pd --env j mytd1 >> "$pd"/"$j".distallel.txt;
     
     echo "$j: counting all alleles";
     >"$pd"/"$j".totallel.txt; #initialize output file with a header for count of all alleles within populations
-    echo "$a" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env mytd2 --env pd --env k /home/reevesp/bin/parallel --jobs 96 --env mytd2 --env pd --env k mytd2 >> "$pd"/"$j".totallel.txt;
+    echo "$a" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env mytd2 --env pd --env k /home/user/bin/parallel --jobs 96 --env mytd2 --env pd --env k mytd2 >> "$pd"/"$j".totallel.txt;
   done;
 
 
@@ -152,14 +120,14 @@ grep ^'@' log.txt | tr '-' '_' | cut -d$'\t' -f1,2 | sort -t_ -k2,2n > counts.tx
 
 c=$(rev counts.txt | cut -d. -f2- | rev | uniq); #list of contig:site-ranges
 >names.txt;
-echo "$c" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env pd --env mypa /home/reevesp/bin/parallel --jobs 96 --env pd --env mypa mypa >> names.txt; #counting sub
+echo "$c" | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env pd --env mypa /home/user/bin/parallel --jobs 96 --env pd --env mypa mypa >> names.txt; #counting sub
 
 #pad the file containing counts of private alleles with "?" for contig:site-range_readgroup combinations that weren't found
 for bb in $b;
 do >"$bb".privallel.txt; #create an output file for the readgroup
   dd="$bb"; export dd; #transfer iterator to variable that can be exported for gnu parallel
   echo "$a" | sed 's/#/@/g' | parallel --sshloginfile ~/machines --jobs 1 --pipe -N960 --env pd --env dd --env mypadpa \
-                              /home/reevesp/bin/parallel --jobs 96 --env pd --env dd --env mypadpa mypadpa >> "$bb".privallel.txt;
+                              /home/user/bin/parallel --jobs 96 --env pd --env dd --env mypadpa mypadpa >> "$bb".privallel.txt;
 done;
 
 #sort and tab delimit output
