@@ -134,10 +134,7 @@ mygetends() {
               lesr=$(cut -d: -f2 <<<"$i" | cut -d'-' -f1); #left end site range
               resr=$(cut -d: -f2 <<<"$i" | cut -d'-' -f2); #right end site range
               
-              #f=$(samtools view -q 1 Hs1pro1l1.finalaln.bam 51jcf7180007742276:"$i"-"$i" | cut -d$'\t' -f4 | sort -nr | head -1);
-              
               #get LE and cigar string for each sequence
-              #g=$(/share/apps/samtools view -F 2048 -q "$stq" "$bam" "$i" | cut -d$'\t' -f4,6); #-F 2048 excludes supplementary alignments
               g=$(samtools view -F 2048 -q "$stq" "$bam" "$i" | cut -d$'\t' -f4,6); #-F 2048 excludes supplementary alignments
               if [[ "$g" == "" ]]; then return; fi; #bail out if there are no aligned reads at the position
               
@@ -146,7 +143,6 @@ mygetends() {
               led=$(( $lesr - $le )); #distance to closest LE
               
               #parse cigar string for right end positions
-              #allres=$(echo "$g" | tr '\t' ':' | parallel --env myparsecigar myparsecigar); #variable to hold all right end positions
               allres="";
               for j in $(echo "$g" | tr '\t' ':' | tr '\n' ' ');
                 do lpos=$(cut -d: -f1 <<<"$j"); #position of first aligned base
@@ -171,7 +167,6 @@ mygetends() {
               
               #calculate closest ends to right side of site range
               #distance to all REs from RE of site range
-              
               re=$(sort -n <<<"$allres" | head -1); #position of closest RE
               red=$(( $re - $resr )); #distance to closest RE
               
@@ -186,7 +181,6 @@ mycon1() {
        contigname=$(cut -d: -f1 <<< "$site");
 
        #extract read pairs at target sites using samtools. Obey include, exclude and quality rules from command line
-       #tmpf1=$(/share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" "$bam" "$site" | sort); #get read pairs mapped to contig:site-range in original bwa or gem alignment
        tmpf1=$(samtools view -f "$stf" -F "$stF" -q "$stq" "$bam" "$site" | sort); #get read pairs mapped to contig:site-range in original bwa or gem alignment
        if [[ "$debug" == "YES" ]]; then echo "$tmpf1" > "$pd"/"$site".tmpf1; fi;
        
@@ -197,9 +191,7 @@ mycon1() {
        #the site range.  These pairs may be eliminated anyway in later steps that realign and filter by quality,
        #but they should not be excluded by virtue of non-overlap with the targeted site range
        
-       #htmpf=$(grep ^'@' <<< "$tmpf1"); #sam header from $tmpf1
        unptmpf=$(cut -d$'\t' -f1 <<< "$tmpf1" | sort -u); #acquire list of all reads that map to the site-range, includes paired and unpaired
-       #btmpf=$(/share/apps/samtools view "$bam" "$contigname"); #get all reads associated with contig
        btmpf=$(samtools view "$bam" "$contigname"); #get all reads associated with contig
        tmpf=$(LC_ALL=C grep -w -F -f <(echo "$unptmpf") <<< "$btmpf"); #get read pairs, any one of which mapped to site-range
 
@@ -222,34 +214,24 @@ mycon1() {
        fi;
 
 
-
-       #myreconfq reconstructs a single fastq file that contains exclusively both reads of a read pair from a sam file
+       #old myreconfq(), integrated here, reconstructs a single fastq file that contains exclusively both reads of a read pair from a sam file
        i="$site"; #input is a description of sites to process in contigname:range format like jcf7180008531951:276-301
-               #the sites are accessed from the variable $tmpf below
+                  #the sites are accessed from the variable $tmpf below
        h=$(cut -d':' -f1 <<<"$i"); #just the contig name
- 
        s=$(awk -F$'\t' -v rgf=$rgf '{print "@"$1"_"$rgf,$10,"+",$11}' <(echo "$tmpf") | tr " " "\n" | sed '/^$/d');
-       
        m=$(grep ^'@' <(echo "$s") | cut -d: -f1-9 | sort -u | sed '/^$/d'); #capture list of unique read pair names (includes also unpaired reads with unique names) that map to contig:site $i 
 
-       
-       
-       
        
        mfa=""; #initialize variable to contain all the read pair haplotypes
        #below j contains a readgroup-annotated read pair name like @E00558:144:HHGCMCCXY:4:2210:23074:34043_RG:Z:55, that aligns to the current contig:site range
        for j in $m;
          do rpfq=$(grep -A3 "$j" <(echo "$s") | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/'); #save read pair into a variable containing a reconstructed fastq, labeled as a read pair for bwa
-           #above, the first sed searches from 0 to the pattern then performs substitution 1 on the fastq defline, which causes the insertion of whitespace.  The second sed then searches the whole file and performs substitution 2 on the second fastq defline. \S means 'not whitespace'
            #above, create single files containing both reads of a read pair
+           #above, the first sed searches from 0 to the pattern then performs substitution 1 on the fastq defline, which causes the insertion of whitespace.  The second sed then searches the whole file and performs substitution 2 on the second fastq defline. \S means 'not whitespace'
            
            #myrealign takes the reads extracted from the primary alignment ($rpfq) and realigns them independently to the contig as reference
-           #mapping quality changes upon realignment, extract only reads with user defined properties (/share/apps/samtools view -fFq), convert those to proper fastq file and re-align again
+           #mapping quality changes upon realignment, extract only reads with user defined properties (samtools view -fFq), convert those to proper fastq file and re-align again
            #-p, paired-end mode assumes read pairs are consecutive; -M mark split hits as secondary alignments (so they can be ignored in samtools view -F step)
-           #t=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$rpfq") 2>/dev/null | \
-           #    /share/apps/samtools sort -O SAM 2>/dev/null | \
-           #    /share/apps/samtools view -f "$stf" -F "$stF" -q "$stq" 2>/dev/null | \
-           #    awk -F$'\t' '{print "@"$1,$10,"+",$11}' | tr " " "\n" | sed '0,/\(^@\S\+$\)/ s/\(^@\S\+$\)/\1 1:N:0:AAAAAA/' | sed 's/\(^@\S\+$\)/\1 2:N:0:AAAAAA/');
            t=$(bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$rpfq") 2>/dev/null | \
                samtools sort -O SAM 2>/dev/null | \
                samtools view -f "$stf" -F "$stF" -q "$stq" 2>/dev/null | \
@@ -257,7 +239,6 @@ mycon1() {
 
            if [[ $(echo "$t") != "" ]]; #only re-realign if there are reads left after latest quality filter
            then x2xsam=$(bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$t") 2>/dev/null | awk -F$'\t' '$4!="*"{print $0}'); #perform second realignment and manually remove any unmapped reads that may have been found as indicated by a * in the position column $4
-             #x2xsam=$(/share/apps/bwa mem -p -M "$pd"/"$h"_ref.txt <(echo "$t") 2>/dev/null | awk -F$'\t' '$4!="*"{print $0}'); #perform second realignment and manually remove any unmapped reads that may have been found as indicated by a * in the position column $4
 
            else continue; #no reads left to align, continue to next
            fi;
@@ -266,18 +247,17 @@ mycon1() {
            lnsam=$(wc -l <<<"$x2xsam");
            if [[ "$lnsam" < 3 ]]; then continue; fi; 
 
-           #mymakehapblocks() processes read pairs into a single contiguous sequence, adds NNNs where opposing read pairs do not overlap to pad relative to the reference, adds IUPAC redundancy codes for conflicts between pairs of a read, removes deletion coding, retains insertions
+
+           #old mymakehapblocks(), integrated here, processes read pairs into a single contiguous sequence, adds NNNs where opposing read pairs do not overlap to pad relative to the reference, adds IUPAC redundancy codes for conflicts between pairs of a read, removes deletion coding, retains insertions
            rp=$(awk -F$'\t' -v h=$h '$3==h{print $1}' <<<"$x2xsam" | sort -u | tr ":" "_"); #extract the unique read name from the sam formatted data that contains a single mapped read pair
            rname=$(tr ':' '_' <<<"$i")"_$rp"; #get a root name for the read pair/contig alignment
 
-           #mp=$(/share/apps/samtools mpileup -A <(echo "$x2xsam") 2>/dev/null); #form the pileup file, use -A to include orphan reads. samtools mpileup by default excludes improper pairs. in hapx, bwa mem will find no proper pairs because too few reads are used during alignment
            mp=$(samtools mpileup -A <(echo "$x2xsam") 2>/dev/null); #form the pileup file, use -A to include orphan reads. samtools mpileup by default excludes improper pairs. in hapx, bwa mem will find no proper pairs because too few reads are used during alignment
 
            #Extract the pos and base columns, remove read start ^., read end $, remove deletion indicators (e.g. -2AC, they are followed with *), pass to myinsertion subroutine to control insertions, then to myiupac to recode conflicts as ambiguous and produce the consensus sequence
            base1=$(cut -d$'\t' -f2,5 <<<"$mp"| sed 's/\^.//g' | sed 's/\$//g' | sed 's/-.*//g' | tr "\n" " " | myinsertion | myiupac); #haplotype extraction, unpadded as of now
 
            #Deal with contiguity and padding
-           #csq=$(myconseq "$(cut -d$'\t' -f2)" <<<"$mp" | grep -v "^1\-" | sed 's/-/ 1 /g'); #identify regions where reads are not aligned consecutively to the reference, exclude the range from 1-start of overlap, set up to use as an interval for seq command
            csq=$(myconseq $(cut -d$'\t' -f2 <<<"$mp") | grep -v "^1\-" | sed 's/-/ 1 /g'); #identify regions where reads are not aligned consecutively to the reference, exclude the range from 1-start of overlap, set up to use as an interval for seq command
            
            #calculate the maximum pad size, if any pad is larger than $maxp continue to next contig:read-pair
@@ -322,13 +302,11 @@ mycon1() {
        fi;
 
 
-
-
-       #mydedup() counts and optionally removes duplicate sequences and subsequences that are exactly contained within longer sequences, from the processed multi fasta file
+       #old mydedup(), integrated here, counts and optionally removes duplicate sequences and subsequences that are exactly contained within longer sequences, from the processed multi fasta file
        inf=$(tr ':' '_' <<<"$i"); #make value like jcf7180008587925_40-41 from jcf7180008587925:40-41
        
        #count duplicated sequences and subsequences
-       # to this process supply each read group separately, and everything together
+       #to this process supply each read group separately, and everything together
        da=$(sed -e '/^>/s/$/@/' -e 's/^>/#/' <(echo "$mfa") | tr -d '\n' | tr "#" "\n" | tr "@" " " | sed '/^$/d' | awk '{print ">rp" NR "_" $0}'); #linearize the data set
        rgs=$(cut -d'_' -f2-4 <<<"$da"| sort -u | tr '\n' ' '); #acquire a list of readgroups
        rgs="$rgs>rp"; #add an item to the list of readgroups that will allow all sequences to be grepped from the file '>rp'
@@ -336,9 +314,7 @@ mycon1() {
        allhash=""; #initialize variable to hold hashes of dna sequences for allele frequency calculation
        basicstats=""; #will contain NumHblocks:NumIdenticalHblocks:NumIdenticalHblockSubsequences:NumDistinctHblocks
        for k in $rgs;
-       do 
-       
-         fon=$(sed 's/>rp/global/' <<<"$k"); #file output name, #replace grep item '>rp' for retrieving all sequences with "global", "global" means all unique haplotypes are counted considering all readgroups simultaneously.
+       do fon=$(sed 's/>rp/global/' <<<"$k"); #file output name, #replace grep item '>rp' for retrieving all sequences with "global", "global" means all unique haplotypes are counted considering all readgroups simultaneously.
          fonmfa=$(grep "$k" <<<"$da" | sort); #make a readgroup specific mfa file. this has all haploblocks, including duplicated and subsequence
          fonlmfa=$(awk -F' ' '!_[$2]++' <<<"$fonmfa"| sort); #make a readgroup specific, linearized lmfa file. this keeps only one of end-to-end identical sequences via the clever awk clause
          e2eident=$(comm -2 -3 <(echo "$fonmfa") <(echo "$fonlmfa")); #collect sequences that were removed as end-to-end identical, these will be added back later to calculate allele frequencies
@@ -369,13 +345,10 @@ mycon1() {
          ns=$(( $ts2 - ($ts3) )); #number of identical subsequences
 
 
-
 ###accumulate counts to report to parallel statement for log.txt###
 #echo "#""$inf"."$fon"$'\t'"$ts1":"$ni":"$ns":"$ts3";
 basicstats+=$(echo "#""$inf"."$fon"$'\t'"$ts1":"$ni":"$ns":"$ts3")$'\n'; 
 ###                                               ###
-
-
 
          #Hash sequences from the current readgroup ($k), add to a variable with the readgroup ID.
          #Set up to calculate allele frequencies.  You must add back the end to end identical sequences to $fonfa, but not the identical subsequences.
@@ -391,7 +364,6 @@ basicstats+=$(echo "#""$inf"."$fon"$'\t'"$ts1":"$ni":"$ns":"$ts3")$'\n';
 
 ###report accumulated counts to parallel statement for log.txt###
 echo "$basicstats" | sed '/^$/d';
-
 
        #at this point you have all unique sequences in $fonfa since the last member of $rgs is ">rp", which includes all sequences
        #use this as the basis for searching through each of the readgroup sequence sets to calculate frequencies
@@ -413,6 +385,7 @@ echo "$basicstats" | sed '/^$/d';
          #echo "@""$inf"."$fon"$'\t'"$cts"$'\t'"$freqs" | sed 's/:$//' | sed "s/:\t/\t/"; #accumulate variable to report allele counts and frequencies
          reportctsfreqs+=$(echo "@""$inf"."$fon"$'\t'"$cts"$'\t'"$freqs" | sed 's/:$//' | sed "s/:\t/\t/")$'\n'; #accumulate variable to report allele counts and frequencies
        done;
+
 ###report counts to parallel statement for log.txt###
 echo "$reportctsfreqs" | sed '/^$/d'; #report to parallel statement
 
@@ -433,11 +406,7 @@ export -f mycon1;
 myalignhaps() {
               i=$1; #i is structured like *jcf7180008848314_28717-32294.global.fa
               thr=$(lscpu | grep "^CPU(s):" | awk '{print $2}'); #max threads
-              #rr=$(cut -d'_' -f1 <<<"$i"); #reference contig name, e.g. jcf7180008454378
-              #ss=$(cut -d'.' -f1 <<<"$i"); #refcontig+siterange, e.g. jcf7180008454378_303-304
-              #tt=$(cut -d'_' -f2 <<<"$ss"); #siterange, e.g. 303-304
               rr=$(rev <<< "$i" | cut -d'_' -f2- | rev ); #reference contig name, e.g. jcf7180008454378
-              #ss=$(cut -d'.' -f1 <<<"$i"); #refcontig+siterange, e.g. 50_ORF803_jcf7180008454378_303-304
               ss=$(rev <<< "$i" | cut -d'.' -f3- | rev); #refcontig+siterange, e.g. 50_ORF803_jcf7180008454378_303-304
               tt=$(rev <<< "$ss" | cut -d'_' -f1 | rev); #siterange, e.g. 303-304
 
@@ -480,11 +449,6 @@ myalignhaps() {
 #                  /share/apps/samtools view -F 2048 -O BAM > "$pd"/alignments/"$ss"_aligned_haps.bam; #-F 2048 excludes supplementary alignments
 #                /share/apps/samtools index "$pd"/alignments/"$ss"_aligned_haps.bam;
 
-                #/share/apps/bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" 2>/dev/null | \
-                # /share/apps/samtools sort -O BAM 2>/dev/null | \
-                #  /share/apps/samtools view -F 2048 -O BAM 2>/dev/null > "$pd"/alignments/"$ss"_aligned_haps.bam; #-F 2048 excludes supplementary alignments
-                #/share/apps/samtools index "$pd"/alignments/"$ss"_aligned_haps.bam 2>/dev/null;
-
                  bwa mem -t "$thr" "$pd"/"$rr"_ref.txt "$pd"/alignments/"$i" 2>/dev/null | \
                   samtools sort -O BAM 2>/dev/null | \
                   samtools view -F 2048 -O BAM 2>/dev/null > "$pd"/alignments/"$ss"_aligned_haps.bam; #-F 2048 excludes supplementary alignments
@@ -494,7 +458,6 @@ myalignhaps() {
               #final multiple alignment with muscle
               if [[ $domuscle == "YES" ]];
               then
-                #faTMP=$(/share/apps/muscle -quiet -in "$pd"/alignments/"$i"); #capture muscle fasta alignment output in a variable
                 faTMP=$(muscle -quiet -in "$pd"/alignments/"$i"); #capture muscle fasta alignment output in a variable
 
                 #put reference sequence at top of muscle output file and sort by read group
@@ -660,7 +623,6 @@ echo "Isolating contigs:"; #this step is fast
 #Below modify the reference genome to have a '>' as the last line before extracting contig with sed.
 #This a hack to take care of the case where the contig of interest is the last one in the reference
 echo "$e" | cut -d: -f1 | sort -u | parallel --bar $suppar 'sed -n -e "/^>{}$/,/>/p" '"<(cat "$ref" <(echo \>))"' | sed "$ d" > '"$pd/"'{}_ref.txt'; #sed extracts lines from name of contig of interest until next contig name line, second sed deletes the last line
-#echo "$e" | cut -d: -f1 | sort -u | parallel --bar 'sed -n -e "/^>{}$/,/>/p" '"$ref"' | sed "$ d" > '"$pd/"'{}_ref.txt'; #sed extracts lines from name of contig of interest until next contig name line, second sed deletes the last line
 
 echo "Indexing contigs:"; #this step should also be fast
 echo "$e" | cut -d: -f1 | sort -u | parallel --bar $suppar 'bwa index '"$pd/"'{}_ref.txt 2>/dev/null'; #index the isolated contigs
@@ -669,7 +631,7 @@ echo "$e" | cut -d: -f1 | sort -u | parallel --bar $suppar 'bwa index '"$pd/"'{}
 #The following single parallel step consolidates independent functions from an earlier prototype of hapx, in order to keep more in memory and less on the drives
 #reconstruct fastq file for reads that aligned to each contig, adding readgroup and f/r designation, r is for reads marked with a negative alignment length in column 9
 #and
-#align *.rp.fq to *_ref.txt, output as bam file, then sambamba index (output files have names like jcf7180008378511_277.bam (contigname_site.bam)
+#align *.rp.fq to *_ref.txt, output as bam file (output files have names like jcf7180008378511_277.bam (contigname_site.bam)
 #this step aligns, then verifies mapping quality since it changes from the original values, then realigns
 #and
 #Process alignments of paired reads via mpileup into a single padded consensus sequence representing the haplotype
@@ -705,7 +667,6 @@ if [[ $doalign == "YES" ]];
 then
   echo "Final mapping and alignment:"
   
-  #if [ ! -f "$pd"/alignments/*.global.fa ];
   if [[ $(find "$pd"/alignments -name "*.global.fa") == "" ]];
   then echo "0" > "$pd"/alignments/NoReadsSoNoAlignmentPossible; #mark that no reads were found so no alignment is possible
   else find "$pd"/alignments -name "*.global.fa"  | rev | cut -d'/' -f1 | rev | parallel --bar $suppar $ssh1 --env PATH --env pd --env debug --env domuscle --env dobwa --env myalignhaps myalignhaps;
