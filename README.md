@@ -12,7 +12,7 @@ Requirements (in path):
 3) GNU parallel
 4) muscle
 
-Usage: hapx -r ref -b bam -o out [-f inc] [-F exc] [-q qual] [-p maxp] [-ssh mach] [-d -mm -mb -x -db -sp] -s sites
+    Usage: hapx -r ref -b bam -o out [-f inc] [-F exc] [-q qual] [-p maxp] [-ssh mach] [-d -mm -mb -x -db -sp] -s sites
 where,
 ref = path to reference genome sequence in multi-fasta format [required]
 bam = path to bam file of reads aligned to ref [required]
