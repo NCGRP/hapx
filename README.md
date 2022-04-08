@@ -28,7 +28,7 @@ exc = integer flag value for Samtools view -F option (properties of reads to exc
 qual = Samtools view -q option (minimum mapping quality of included reads) [default=60, don't use 0 use 1 instead, 0 is poorly defined]
 maxp = allow no more than maxp Ns between read pairs. This prevents read pairs from being assembled into an NNN-padded haploblock when they are too far apart.  You may want to set -p maxp according to average library insert size [default 1000];
 mach = path to "machines" file for the gnu parallel command --sshloginfile, forces distribution across nodes
-```
+
 
 -d = delete non-unique haploblocks from output (keep 1 from a set of identical haploblocks, keep the longer haploblock when there are exact match subsequences)
 -mm = align (muscle) extracted haploblocks
@@ -144,8 +144,4 @@ for i in $b;
     mv "$i".2.totallel.txt "$i".totallel.txt;
     mv "$i".2.privallel.txt "$i".privallel.txt;
   done;
-
-
-
-
-
+```
